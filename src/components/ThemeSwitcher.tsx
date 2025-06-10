@@ -3,15 +3,17 @@
 "use client";
 
 import { useTheme, type Theme } from "@/contexts/ThemeContext";
+import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Monitor, Sun, Moon, Palette } from "lucide-react"; // Palette for more options
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Monitor, Sun, Moon, Palette } from "lucide-react";
 
 const themeOptions: { value: Theme; label: string; icon?: React.ReactNode }[] = [
   { value: "light", label: "Light", icon: <Sun className="mr-2 h-4 w-4" /> },
@@ -28,26 +30,27 @@ export default function ThemeSwitcher() {
   };
 
   return (
-    <div className="space-y-2">
-      <Label htmlFor="theme-select" className="text-lg font-medium">Select Theme</Label>
-      <Select value={theme} onValueChange={handleThemeChange}>
-        <SelectTrigger id="theme-select" className="w-full md:w-[280px]">
-          <SelectValue placeholder="Select a theme" />
-        </SelectTrigger>
-        <SelectContent>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon">
+          <Palette className="h-5 w-5" />
+          <span className="sr-only">Toggle theme</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Select Theme</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuRadioGroup value={theme} onValueChange={handleThemeChange}>
           {themeOptions.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
+            <DropdownMenuRadioItem key={option.value} value={option.value}>
               <div className="flex items-center">
                 {option.icon}
                 {option.label}
               </div>
-            </SelectItem>
+            </DropdownMenuRadioItem>
           ))}
-        </SelectContent>
-      </Select>
-      <p className="text-sm text-muted-foreground">
-        Choose how EchoSphere looks to you. Your preference will be saved.
-      </p>
-    </div>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

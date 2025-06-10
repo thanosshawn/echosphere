@@ -8,7 +8,7 @@ import { useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { User, Shield, Bell, Palette, LogOut, Loader2 } from "lucide-react";
+import { User, Shield, Bell, LogOut, Loader2 } from "lucide-react"; // Palette icon removed
 
 export default function SettingsPage() {
   const { currentUser, loading: authLoading, signOut } = useAuth();
@@ -29,26 +29,21 @@ export default function SettingsPage() {
       title: "Profile",
       description: "Update your personal information, bio, and profile picture.",
       icon: <User className="h-5 w-5 text-primary" />,
-      link: "/settings/profile", // Assuming this page exists or will be created
+      link: "/settings/profile", 
     },
     {
       title: "Account",
       description: "Manage your email, password, and account security settings.",
       icon: <Shield className="h-5 w-5 text-primary" />,
-      link: "/settings/account", // Assuming this page exists or will be created
+      link: "/settings/account", 
     },
     {
       title: "Notifications",
       description: "Configure your notification preferences.",
       icon: <Bell className="h-5 w-5 text-primary" />,
-      link: "/settings/notifications", // Assuming this page exists or will be created
+      link: "/settings/notifications", 
     },
-    {
-      title: "Appearance",
-      description: "Customize the look and feel of EchoSphere (e.g., theme).",
-      icon: <Palette className="h-5 w-5 text-primary" />,
-      link: "/settings/appearance", // Updated link
-    },
+    // Appearance category removed as theme switcher is now in the navbar
   ];
 
   return (

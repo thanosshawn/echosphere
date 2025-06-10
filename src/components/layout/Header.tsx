@@ -1,3 +1,4 @@
+
 // src/components/layout/Header.tsx
 "use client";
 
@@ -16,6 +17,7 @@ import { Bell, LogOut, PlusCircle, User, Settings, LayoutDashboard } from 'lucid
 import { useAuth } from '@/contexts/AuthContext';
 import Logo from '@/components/Logo';
 import { Skeleton } from '@/components/ui/skeleton';
+import ThemeSwitcher from '@/components/ThemeSwitcher'; // Import ThemeSwitcher
 
 const Header = () => {
   const { currentUser, loading, signOut } = useAuth();
@@ -24,14 +26,14 @@ const Header = () => {
     <header className="bg-card border-b border-border shadow-sm sticky top-0 z-50">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <Logo />
-        <nav className="flex items-center gap-4">
+        <nav className="flex items-center gap-2 md:gap-4"> {/* Adjusted gap for smaller screens */}
           <Button variant="ghost" asChild>
             <Link href="/stories">Stories</Link>
           </Button>
-          {/* "Create Story" link is now always visible */}
           <Button variant="ghost" asChild>
             <Link href="/stories/create">
-              <PlusCircle className="mr-2 h-4 w-4" /> Create Story
+              <PlusCircle className="mr-0 md:mr-2 h-4 w-4" /> {/* Hide text on small screens if needed */}
+              <span className="hidden md:inline">Create Story</span>
             </Link>
           </Button>
           
@@ -39,14 +41,13 @@ const Header = () => {
             <Skeleton className="h-10 w-24" /> 
           ) : currentUser ? (
             <>
-              {/* Notifications Icon */}
+              <ThemeSwitcher /> {/* Add ThemeSwitcher here */}
               <Button variant="ghost" size="icon" asChild>
                 <Link href="/notifications">
                   <Bell className="h-5 w-5" />
                   <span className="sr-only">Notifications</span>
                 </Link>
               </Button>
-              {/* User Avatar and Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
@@ -90,6 +91,7 @@ const Header = () => {
             </>
           ) : (
             <>
+              <ThemeSwitcher /> {/* Add ThemeSwitcher here for logged-out users too */}
               <Button variant="outline" asChild>
                 <Link href="/login">Login</Link>
               </Button>
