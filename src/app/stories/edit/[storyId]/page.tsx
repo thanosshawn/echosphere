@@ -16,7 +16,15 @@ import type { AddStoryNodeActionInput } from "./actions";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormDescription, // Added FormDescription
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 // Textarea removed
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
@@ -131,7 +139,7 @@ export default function EditStoryPage() {
       storyId: story.id,
       authorId: currentUser.uid,
       authorUsername: currentUser.displayName || currentUser.email || "Anonymous",
-      authorProfilePictureUrl: currentUser.photoURL || "",
+      authorProfilePictureUrl: currentUser.photoURL || null,
       newNodeContent: values.newNodeContent,
       parentNodeId: values.parentNodeId,
     };
