@@ -58,17 +58,22 @@ export async function addCommentToStoryNodeAction(
     batch.set(commentRef, newComment);
     console.log("[addCommentToStoryNodeAction] Comment added to batch:", newComment);
 
-    // Debugging FieldValue.increment
-    console.log("[addCommentToStoryNodeAction] Type of FieldValue:", typeof FieldValue);
-    if (FieldValue && typeof FieldValue.increment === 'function') {
-      console.log("[addCommentToStoryNodeAction] FieldValue.increment is a function. Proceeding.");
+    // Debugging FieldValue.increment with Turbopack
+    console.log("[addCommentToStoryNodeAction] Checking FieldValue.increment. Type of FieldValue:", typeof FieldValue);
+    if (FieldValue && typeof FieldValue.increment === 'function') { // Check if FieldValue itself and its increment property are valid
+      console.log("[addCommentToStoryNodeAction] FieldValue.increment is a function. Proceeding with batch.update for commentCount.");
       batch.update(nodeRef, { commentCount: FieldValue.increment(1) });
     } else {
-      console.error("[addCommentToStoryNodeAction] CRITICAL: FieldValue.increment is NOT a function. Type:", typeof FieldValue?.increment);
-      console.error("[addCommentToStoryNodeAction] FieldValue object:", FieldValue);
-      // Attempt to see what FieldValue contains if it's an object
+      const errorMessageDetail = `FieldValue.increment is NOT a function. Type of FieldValue: ${typeof FieldValue}, Type of FieldValue.increment: ${typeof FieldValue?.increment}.`;
+      console.error("[addCommentToStoryNodeAction] CRITICAL ERROR:", errorMessageDetail);
+      console.error("[addCommentToStoryNodeAction] Full FieldValue object for inspection:", FieldValue);
+      // Try to inspect keys if FieldValue is an object
       if (typeof FieldValue === 'object' && FieldValue !== null) {
-        console.error("[addCommentToStoryNodeAction] Keys of FieldValue:", Object.keys(FieldValue));
+        try {
+          console.error("[addCommentToStoryNodeAction] Keys of FieldValue:", Object.keys(FieldValue));
+        } catch (e) {
+          console.error("[addCommentToStoryNodeAction] Could not get keys of FieldValue:", e);
+        }
       }
       throw new Error("Firestore FieldValue.increment is not available or not a function.");
     }
@@ -189,14 +194,20 @@ async function handleVote(
         }
       }
 
-      // Debugging FieldValue.increment for votes (if used, currently not but good practice)
-      // console.log("[handleVote] Type of FieldValue:", typeof FieldValue);
-      // if (FieldValue && typeof FieldValue.increment === 'function') {
-      //   console.log("[handleVote] FieldValue.increment is a function.");
-      // } else {
-      //   console.error("[handleVote] CRITICAL: FieldValue.increment is NOT a function. Type:", typeof FieldValue?.increment);
-      //   throw new Error("Firestore FieldValue.increment is not available or not a function for voting.");
-      // }
+      // Debugging FieldValue.increment for votes
+      console.log("[handleVote] Checking FieldValue.increment. Type of FieldValue:", typeof FieldValue);
+      if (FieldValue && typeof FieldValue.increment === 'function') {
+        console.log("[handleVote] FieldValue.increment is a function. Updating votes.");
+        // Note: FieldValue.increment should not be used here directly for setting vote counts
+        // as the logic above already calculates the new absolute values (newUpvotes, newDownvotes).
+        // FieldValue.increment is for atomic server-side increments, not for setting calculated values.
+        // The current logic of calculating newUpvotes/newDownvotes and then setting them is correct for this scenario.
+      } else {
+          const errorMessageDetail = `FieldValue.increment is NOT a function in handleVote. Type of FieldValue: ${typeof FieldValue}, Type of FieldValue.increment: ${typeof FieldValue?.increment}.`;
+          console.error("[handleVote] CRITICAL ERROR:", errorMessageDetail);
+          // This part might not be directly causing an issue if FieldValue.increment is not used for votes,
+          // but it's good to log if it's unexpectedly not a function.
+      }
 
       transaction.update(nodeRef, {
         upvotes: newUpvotes,
