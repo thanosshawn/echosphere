@@ -3,7 +3,8 @@
 'use server';
 
 import { z } from 'zod';
-import { db, supabase } from '@/lib/firebase'; // Assuming supabase is exported from firebase.ts or a central lib
+import { db } from '@/lib/firebase';
+import { supabase } from '@/lib/supabase'; // Corrected import path
 import { writeBatch, doc, collection } from 'firebase/firestore';
 import type { Story, StoryNode } from '@/types';
 import { revalidatePath } from 'next/cache';
@@ -12,7 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 // Schema for input to the server action - matches FormData structure
 const createStoryServerActionSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters").max(150, "Title must be less than 150 characters"),
-  initialNodeContent: z.string().min(10, "Initial story content must be at least 10 characters."),
+  initialNodeContent: z.string().min(10, "Initial story content must be at least 10 characters (HTML allowed).").refine(value => value !== '<p></p>', { message: "Initial story content cannot be empty." }),
   category: z.string().min(1, "Please select a category"),
   tags: z.string().optional(),
   status: z.enum(["draft", "published"]),
@@ -120,7 +121,7 @@ export async function createStoryAction(formData: CreateStoryFormValues): Promis
       authorId,
       authorUsername: authorUsername || 'Anonymous',
       authorProfilePictureUrl: authorProfilePictureUrl || undefined,
-      content: initialNodeContent,
+      content: initialNodeContent, // Save HTML content
       order: currentTime, // Use timestamp for ordering
       parentId: null, // Root node
       createdAt: currentTime,
