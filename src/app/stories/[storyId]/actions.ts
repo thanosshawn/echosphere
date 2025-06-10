@@ -14,7 +14,7 @@ const addCommentToStoryNodeSchema = z.object({
   authorId: z.string().min(1),
   authorUsername: z.string(),
   authorProfilePictureUrl: z.string().optional().nullable(),
-  text: z.string().min(1, "Comment cannot be empty"),
+  text: z.string().min(1, "Comment cannot be empty (HTML allowed)"), // Allow HTML
 });
 
 export type AddCommentToStoryNodeInput = z.infer<typeof addCommentToStoryNodeSchema>;
@@ -27,7 +27,8 @@ export async function addCommentToStoryNodeAction(
   }
   const validatedFields = addCommentToStoryNodeSchema.safeParse(values);
   if (!validatedFields.success) {
-    return { error: "Invalid comment data.", commentId: null };
+    const errorMessages = Object.values(validatedFields.error.flatten().fieldErrors).flat().join(', ');
+    return { error: `Invalid comment data: ${errorMessages}`, commentId: null };
   }
 
   const { storyId, nodeId, authorId, authorUsername, authorProfilePictureUrl, text } = validatedFields.data;
@@ -44,18 +45,17 @@ export async function addCommentToStoryNodeAction(
       authorId,
       authorUsername,
       authorProfilePictureUrl: authorProfilePictureUrl || undefined,
-      text,
+      text, // Save HTML content
       createdAt: currentTime,
-      parentId: null, // For top-level comments on nodes
-      depth: 0,      // For top-level comments on nodes
+      parentId: null, 
+      depth: 0,      
     };
     batch.set(commentRef, newComment);
     
-    // Atomically increment commentCount on the node
     batch.update(nodeRef, { commentCount: FieldValue.increment(1) });
 
     await batch.commit();
-    revalidatePath(`/stories/${storyId}`); // Revalidate the story detail page
+    revalidatePath(`/stories/${storyId}`); 
     return { success: "Comment posted!", commentId: commentRef.id };
 
   } catch (error) {
@@ -81,7 +81,6 @@ async function handleVote(
 
   const validatedFields = voteActionSchema.safeParse(values);
   if (!validatedFields.success) {
-    // Construct a more detailed error message from Zod errors
     const errorMessages = Object.values(validatedFields.error.flatten().fieldErrors)
       .map(errors => errors?.join(', '))
       .filter(Boolean)
@@ -106,21 +105,21 @@ async function handleVote(
       const userPreviousVote = currentVotedBy[userId];
 
       if (voteType === 'upvote') {
-        if (userPreviousVote === 'upvote') { // User is removing their upvote
+        if (userPreviousVote === 'upvote') { 
           newUpvotes = Math.max(0, newUpvotes - 1);
           delete currentVotedBy[userId];
-        } else { // New upvote or changing from downvote
+        } else { 
           if (userPreviousVote === 'downvote') {
             newDownvotes = Math.max(0, newDownvotes - 1);
           }
           newUpvotes += 1;
           currentVotedBy[userId] = 'upvote';
         }
-      } else { // voteType === 'downvote'
-        if (userPreviousVote === 'downvote') { // User is removing their downvote
+      } else { 
+        if (userPreviousVote === 'downvote') { 
           newDownvotes = Math.max(0, newDownvotes - 1);
           delete currentVotedBy[userId];
-        } else { // New downvote or changing from upvote
+        } else { 
           if (userPreviousVote === 'upvote') {
             newUpvotes = Math.max(0, newUpvotes - 1);
           }
@@ -132,7 +131,7 @@ async function handleVote(
         upvotes: newUpvotes,
         downvotes: newDownvotes,
         votedBy: currentVotedBy,
-        updatedAt: Date.now(), // Using client-side timestamp for simplicity
+        updatedAt: Date.now(), 
       });
     });
 

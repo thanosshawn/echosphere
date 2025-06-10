@@ -3,54 +3,101 @@
 'use server';
 
 import { z } from 'zod';
-import { db } from '@/lib/firebase';
+import { db, supabase } from '@/lib/firebase'; // Assuming supabase is exported from firebase.ts or a central lib
 import { writeBatch, doc, collection } from 'firebase/firestore';
-import type { Story, StoryPart } from '@/types';
+import type { Story, StoryNode } from '@/types';
 import { revalidatePath } from 'next/cache';
+import { v4 as uuidv4 } from 'uuid';
 
-// Schema for input to the server action matches the form values plus author info
+// Schema for input to the server action - matches FormData structure
 const createStoryServerActionSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters").max(150, "Title must be less than 150 characters"),
-  initialContent: z.string().min(50, "Story content must be at least 50 characters"),
+  initialNodeContent: z.string().min(10, "Initial story content must be at least 10 characters."),
   category: z.string().min(1, "Please select a category"),
   tags: z.string().optional(),
   status: z.enum(["draft", "published"]),
   authorId: z.string(),
   authorUsername: z.string(),
   authorProfilePictureUrl: z.string().optional().nullable(),
+  coverImage: z.instanceof(File).optional().nullable(),
 });
 
-export type CreateStoryActionInput = z.infer<typeof createStoryServerActionSchema>;
+// This is what the page will pass (FormData)
+export type CreateStoryFormValues = FormData;
 
-export async function createStoryAction(values: CreateStoryActionInput): Promise<{ success?: string; error?: string; storyId?: string | null }> {
+
+export async function createStoryAction(formData: CreateStoryFormValues): Promise<{ success?: string; error?: string; storyId?: string | null }> {
   if (!db) {
     console.error("Firestore database is not initialized.");
-    return { error: "Database service is unavailable. Please contact support if the issue persists.", storyId: null };
+    return { error: "Database service is unavailable.", storyId: null };
+  }
+   if (!supabase) {
+    console.error("Supabase client is not initialized.");
+    return { error: "Storage service is unavailable.", storyId: null };
   }
 
-  const validatedFields = createStoryServerActionSchema.safeParse(values);
+  const rawData = {
+    title: formData.get('title') as string,
+    initialNodeContent: formData.get('initialNodeContent') as string,
+    category: formData.get('category') as string,
+    tags: formData.get('tags') as string | undefined,
+    status: formData.get('status') as "draft" | "published",
+    authorId: formData.get('authorId') as string,
+    authorUsername: formData.get('authorUsername') as string,
+    authorProfilePictureUrl: formData.get('authorProfilePictureUrl') as string | null,
+    coverImage: formData.get('coverImage') as File | null,
+  };
+  
+  const validatedFields = createStoryServerActionSchema.safeParse(rawData);
 
   if (!validatedFields.success) {
     console.error("Invalid story data received by action:", validatedFields.error.flatten().fieldErrors);
-    return { error: "Invalid data provided. Please check the form and try again.", storyId: null };
+    const errorMessages = Object.values(validatedFields.error.flatten().fieldErrors).flat().join(', ');
+    return { error: `Invalid data: ${errorMessages}`, storyId: null };
   }
 
-  const { title, initialContent, category, tags, status, authorId, authorUsername, authorProfilePictureUrl } = validatedFields.data;
+  const { title, initialNodeContent, category, tags, status, authorId, authorUsername, authorProfilePictureUrl, coverImage } = validatedFields.data;
   const currentTime = Date.now();
+  let coverImageUrl: string | null = null;
+
+  // Handle Cover Image Upload to Supabase
+  if (coverImage) {
+    const fileExtension = coverImage.name.split('.').pop();
+    const fileName = `${uuidv4()}.${fileExtension}`;
+    const filePath = `story-covers/${fileName}`;
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('story-covers') // Ensure this bucket exists and is public or has RLS configured
+      .upload(filePath, coverImage, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("Error uploading cover image to Supabase:", uploadError);
+      return { error: "Failed to upload cover image. Please try again.", storyId: null };
+    }
+    // Construct the public URL. Adjust if your Supabase setup is different.
+    const { data: publicUrlData } = supabase.storage.from('story-covers').getPublicUrl(filePath);
+    coverImageUrl = publicUrlData.publicUrl;
+  }
+
 
   try {
     const batch = writeBatch(db);
-
-    // 1. Create the main Story document
     const storyCollectionRef = collection(db, 'stories');
-    const newStoryRef = doc(storyCollectionRef); // Generate a new ID for the story
+    const newStoryRef = doc(storyCollectionRef); 
+
+    // Basic plain text excerpt - improve if rich text is complex
+    const plainTextExcerpt = initialNodeContent.replace(/<[^>]+>/g, '').substring(0, 200) + (initialNodeContent.length > 200 ? "..." : "");
+
 
     const storyToCreate: Omit<Story, 'id'> = {
       authorId,
       authorUsername: authorUsername || 'Anonymous',
       authorProfilePictureUrl: authorProfilePictureUrl || undefined,
       title,
-      // coverImageUrl: '', // To be implemented
+      coverImageUrl,
       tags: tags ? tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
       category,
       status,
@@ -58,25 +105,32 @@ export async function createStoryAction(values: CreateStoryActionInput): Promise
       updatedAt: currentTime, 
       views: 0,
       likes: 0,
-      commentCount: 0,
-      partCount: 1, 
-      firstPartExcerpt: initialContent.substring(0, 150) + (initialContent.length > 150 ? "..." : ""),
+      nodeCount: 1, 
+      firstNodeExcerpt: plainTextExcerpt,
+      isLocked: false,
+      canonicalBranchNodeId: null,
     };
     batch.set(newStoryRef, storyToCreate);
 
-    // 2. Create the first StoryPart document in the subcollection
-    const storyPartsCollectionRef = collection(db, 'stories', newStoryRef.id, 'parts');
-    const firstPartRef = doc(storyPartsCollectionRef); // Generate ID for the part
+    const storyNodesCollectionRef = collection(db, 'stories', newStoryRef.id, 'nodes');
+    const firstNodeRef = doc(storyNodesCollectionRef); 
 
-    const firstStoryPart: Omit<StoryPart, 'id'> = {
+    const firstStoryNode: Omit<StoryNode, 'id'> = {
       storyId: newStoryRef.id,
       authorId,
-      content: initialContent,
-      order: 1,
+      authorUsername: authorUsername || 'Anonymous',
+      authorProfilePictureUrl: authorProfilePictureUrl || undefined,
+      content: initialNodeContent,
+      order: currentTime, // Use timestamp for ordering
+      parentId: null, // Root node
       createdAt: currentTime,
       updatedAt: currentTime,
+      upvotes: 0,
+      downvotes: 0,
+      votedBy: {},
+      commentCount: 0,
     };
-    batch.set(firstPartRef, firstStoryPart);
+    batch.set(firstNodeRef, firstStoryNode);
 
     await batch.commit();
 
@@ -88,8 +142,10 @@ export async function createStoryAction(values: CreateStoryActionInput): Promise
     }
 
     return { success: status === "published" ? "Your story is now live!" : "Your story has been saved as a draft.", storyId: newStoryRef.id };
-  } catch (error) {
-    console.error("Error creating story and first part in Firestore:", error);
+  } catch (error)
+ {
+    console.error("Error creating story and first node in Firestore:", error);
     return { error: "An error occurred while saving your story. Please try again.", storyId: null };
   }
 }
+

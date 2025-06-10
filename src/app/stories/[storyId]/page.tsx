@@ -2,7 +2,7 @@
 // src/app/stories/[storyId]/page.tsx
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Fragment } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { doc, getDoc, collection, getDocs, query, orderBy as firestoreOrderBy, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -14,17 +14,28 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
+// Textarea removed
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, Edit, Eye, Heart, Loader2, MessageSquare, Send, User, Tag, ThumbsUp, ThumbsDown, CornerDownRight } from "lucide-react";
 import { addCommentToStoryNodeAction, upvoteStoryNodeAction, downvoteStoryNodeAction } from "./actions.ts";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import RichTextEditor from "@/components/editor/RichTextEditor";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
+
+const commentFormSchema = z.object({
+  commentText: z.string().min(1, "Comment cannot be empty (HTML allowed)."),
+});
+type CommentFormValues = z.infer<typeof commentFormSchema>;
 
 interface StoryNodeDisplayProps {
   node: StoryNode;
-  allNodes: StoryNode[];
+  allNodes: StoryNode[]; // All nodes for the story, to find children
   storyId: string;
   storyAuthorId: string;
   level?: number;
@@ -43,12 +54,20 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
   onVote,
   refreshAllNodes 
 }) => {
+  // Find direct children of the current node
   const children = allNodes.filter(childNode => childNode.parentId === node.id).sort((a, b) => a.order - b.order);
-  const [newComment, setNewComment] = useState("");
+  
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [nodeComments, setNodeComments] = useState<StoryNodeComment[]>([]);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
   const { toast } = useToast();
+
+  const commentForm = useForm<CommentFormValues>({
+    resolver: zodResolver(commentFormSchema),
+    defaultValues: {
+      commentText: "<p></p>",
+    },
+  });
 
   const fetchNodeComments = useCallback(async (currentNodeId: string) => {
     if (!db || !storyId || !currentNodeId) return;
@@ -75,9 +94,8 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
   }, [fetchNodeComments, node.id]);
 
 
-  const handlePostComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentUser || !newComment.trim() || !storyId || !node.id) return;
+  const handlePostComment = async (values: CommentFormValues) => {
+    if (!currentUser || !values.commentText.trim() || !storyId || !node.id) return;
     setIsSubmittingComment(true);
     const result = await addCommentToStoryNodeAction({
       storyId,
@@ -85,13 +103,13 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
       authorId: currentUser.uid,
       authorUsername: currentUser.displayName || currentUser.email || "Anonymous",
       authorProfilePictureUrl: currentUser.photoURL,
-      text: newComment,
+      text: values.commentText,
     });
     if (result.success) {
       toast({ title: "Comment Posted!" });
-      setNewComment("");
+      commentForm.reset({ commentText: "<p></p>" });
       fetchNodeComments(node.id); 
-      refreshAllNodes(); // Re-fetch all nodes to update comment counts
+      refreshAllNodes(); 
     } else {
       toast({ title: "Error", description: result.error, variant: "destructive" });
     }
@@ -109,9 +127,9 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
   const userVote = currentUser && node.votedBy ? node.votedBy[currentUser.uid] : null;
 
   return (
-    <div style={{ marginLeft: `${level * 20}px` }} className={`mt-4 p-4 border rounded-lg shadow-sm ${level > 0 ? 'bg-muted/20' : 'bg-card'}`}>
+    <div style={{ marginLeft: `${level * 25}px` }} className={`mt-4 p-4 border rounded-lg shadow-sm ${level > 0 ? 'bg-muted/30' : 'bg-card'}`}>
       {level > 0 && <CornerDownRight className="inline-block h-4 w-4 mr-2 text-muted-foreground" />}
-      <div className="flex justify-between items-start mb-1">
+      <div className="flex justify-between items-start mb-2">
         <div className="flex items-center space-x-2 text-xs text-muted-foreground">
             <Avatar className="h-6 w-6">
                 <AvatarImage src={node.authorProfilePictureUrl || undefined} alt={node.authorUsername} />
@@ -123,18 +141,18 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
         </div>
       </div>
       
-      <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed space-y-2 mb-3">
-        {node.content.split('\\n').map((paragraph, pIndex) => (
-          paragraph.trim() ? <p key={`${node.id}-p-${pIndex}`}>{paragraph}</p> : null
-        ))}
-      </div>
+      <div 
+        className="prose prose-sm dark:prose-invert max-w-none leading-relaxed space-y-2 mb-3"
+        dangerouslySetInnerHTML={{ __html: node.content }}
+      />
+
       <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-3 pt-3 border-t">
         <Button variant="ghost" size="sm" onClick={() => handleLocalVote('upvote')} disabled={!currentUser} 
-                className={cn(userVote === 'upvote' && 'text-primary bg-primary/10')}>
+                className={cn(userVote === 'upvote' && 'text-primary bg-primary/10 hover:bg-primary/20')}>
           <ThumbsUp className="mr-1.5 h-4 w-4" /> {node.upvotes || 0}
         </Button>
         <Button variant="ghost" size="sm" onClick={() => handleLocalVote('downvote')} disabled={!currentUser}
-                className={cn(userVote === 'downvote' && 'text-destructive bg-destructive/10')}>
+                className={cn(userVote === 'downvote' && 'text-destructive bg-destructive/10 hover:bg-destructive/20')}>
           <ThumbsDown className="mr-1.5 h-4 w-4" /> {node.downvotes || 0}
         </Button>
         <span className="flex items-center"><MessageSquare className="mr-1.5 h-4 w-4" /> {node.commentCount || 0}</span>
@@ -161,7 +179,10 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
                         &bull; {new Date(comment.createdAt).toLocaleString()}
                     </span>
                 </div>
-                <p className="pl-7 text-foreground/90">{comment.text}</p>
+                <div 
+                  className="prose prose-xs dark:prose-invert max-w-none pl-7 text-foreground/90"
+                  dangerouslySetInnerHTML={{ __html: comment.text }}
+                />
               </div>
             ))}
           </div>
@@ -170,19 +191,30 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
         )}
 
         {currentUser && (
-          <form onSubmit={handlePostComment} className="mt-4 space-y-2">
-            <Textarea
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add your comment..."
-              className="text-xs min-h-[60px]"
-              rows={2}
-            />
-            <Button type="submit" size="sm" disabled={isSubmittingComment || !newComment.trim()}>
-              {isSubmittingComment && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-              Post Comment
-            </Button>
-          </form>
+          <Form {...commentForm}>
+            <form onSubmit={commentForm.handleSubmit(handlePostComment)} className="mt-4 space-y-2">
+              <FormField
+                control={commentForm.control}
+                name="commentText"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="sr-only">Add your comment</FormLabel>
+                    <FormControl>
+                      <RichTextEditor
+                        initialContent={field.value}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button type="submit" size="sm" disabled={isSubmittingComment || !commentForm.formState.isValid}>
+                {isSubmittingComment && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                Post Comment
+              </Button>
+            </form>
+          </Form>
         )}
          {!currentUser && (
              <p className="text-xs text-muted-foreground mt-3">
@@ -243,7 +275,6 @@ export default function StoryDetailPage() {
         });
 
         const nodesCollectionRef = collection(db, "stories", storyId, "nodes");
-        // Fetch nodes ordered by their 'order' field (timestamp)
         const nodesQuery = query(nodesCollectionRef, firestoreOrderBy("order", "asc"));
         const nodesSnapshot = await getDocs(nodesQuery);
         
@@ -294,6 +325,29 @@ export default function StoryDetailPage() {
     }
   };
   
+  const renderNodesRecursive = (nodesToRender: StoryNode[], allNodes: StoryNode[], parentId: string | null, level: number = 0): JSX.Element[] => {
+    return nodesToRender
+      .filter(node => node.parentId === parentId)
+      .sort((a,b) => a.order - b.order) // Ensure chronological order for siblings
+      .map(node => (
+        <Fragment key={node.id}>
+          <StoryNodeDisplay
+            node={node}
+            allNodes={allNodes}
+            storyId={story!.id} // story is guaranteed to be non-null here
+            storyAuthorId={story!.authorId}
+            level={level}
+            currentUser={currentUser}
+            onVote={handleVoteOnNode}
+            refreshAllNodes={fetchStoryAndNodes}
+          />
+          {/* Recursively render children for this node */}
+          {/* {renderNodesRecursive(allNodes, allNodes, node.id, level + 1)} */} 
+          {/* Corrected: children already filtered inside StoryNodeDisplay */}
+        </Fragment>
+      ));
+  };
+
 
   if (loading || authLoading) {
     return (
@@ -327,7 +381,8 @@ export default function StoryDetailPage() {
   }
   
   const isAuthor = currentUser?.uid === story.authorId;
-  const rootNodes = storyNodes.filter(node => !node.parentId).sort((a, b) => a.order - b.order);
+  // Initial call to renderNodesRecursive starts with parentId = null for root nodes
+  const rootNodesToRender = storyNodes.filter(node => node.parentId === null);
 
 
   return (
@@ -356,7 +411,7 @@ export default function StoryDetailPage() {
               height={400}
               className="w-full h-auto object-cover max-h-[400px]"
               data-ai-hint="story cover large"
-              priority // Add priority if it's LCP
+              priority 
             />
           </div>
         )}
@@ -391,19 +446,8 @@ export default function StoryDetailPage() {
 
         <Separator className="my-6" />
 
-        {rootNodes.length > 0 ? (
-            rootNodes.map(node => (
-              <StoryNodeDisplay 
-                key={node.id} 
-                node={node} 
-                allNodes={storyNodes} 
-                storyId={story.id}
-                storyAuthorId={story.authorId}
-                currentUser={currentUser}
-                onVote={handleVoteOnNode}
-                refreshAllNodes={fetchStoryAndNodes} // Pass the refetch function
-              />
-            ))
+        {rootNodesToRender.length > 0 ? (
+            renderNodesRecursive(rootNodesToRender, storyNodes, null, 0)
           ) : (
             <Card className="p-6 text-center">
                 <CardDescription>This story doesn't have any content yet. {isAuthor ? "Why not add the first node?" : ""}</CardDescription>
@@ -433,6 +477,11 @@ export default function StoryDetailPage() {
           <div className="flex items-center space-x-6 text-muted-foreground">
             <span className="flex items-center"><Eye className="mr-1.5 h-5 w-5" /> {story.views || 0} views</span>
             <span className="flex items-center"><Heart className="mr-1.5 h-5 w-5" /> {story.likes || 0} likes</span>
+             <span className="flex items-center">
+              <MessageSquare className="mr-1.5 h-5 w-5" /> 
+              {/* Sum of commentCounts from all nodes - this could be denormalized on Story doc for efficiency */}
+              {storyNodes.reduce((acc, curr) => acc + (curr.commentCount || 0), 0)} total comments on nodes
+            </span>
           </div>
         </footer>
       </article>

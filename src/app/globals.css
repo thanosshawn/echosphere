@@ -195,4 +195,52 @@
   body {
     @apply bg-background text-foreground transition-colors duration-300 ease-in-out;
   }
+
+  /* Basic Tiptap Content Styling */
+  .ProseMirror {
+    @apply p-2 rounded-md;
+  }
+  .ProseMirror > * + * {
+    @apply mt-4; /* Consistent spacing between blocks */
+  }
+  .ProseMirror p {
+    @apply leading-relaxed;
+  }
+  .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6 {
+    @apply font-headline mb-2 mt-4 font-semibold;
+  }
+  .ProseMirror h1 { @apply text-3xl; }
+  .ProseMirror h2 { @apply text-2xl; }
+  .ProseMirror h3 { @apply text-xl; }
+
+  .ProseMirror ul, .ProseMirror ol {
+    @apply pl-6 my-2;
+  }
+  .ProseMirror ul {
+    @apply list-disc;
+  }
+  .ProseMirror ol {
+    @apply list-decimal;
+  }
+  .ProseMirror li > p { /* Remove margin for paragraphs inside list items */
+    @apply my-0;
+  }
+  .ProseMirror blockquote {
+    @apply border-l-4 border-primary pl-4 italic text-muted-foreground my-4;
+  }
+  .ProseMirror pre {
+    @apply bg-muted text-muted-foreground rounded-md p-4 text-sm overflow-x-auto;
+  }
+  .ProseMirror code {
+    @apply bg-muted text-muted-foreground px-1 py-0.5 rounded text-sm;
+  }
+  .ProseMirror pre code { /* Reset for code within pre blocks */
+    @apply bg-transparent p-0 rounded-none;
+  }
+  .ProseMirror a {
+    @apply text-primary hover:underline;
+  }
+  .ProseMirror hr {
+    @apply border-border my-4;
+  }
 }

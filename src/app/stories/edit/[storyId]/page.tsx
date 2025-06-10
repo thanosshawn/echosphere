@@ -2,30 +2,33 @@
 // src/app/stories/edit/[storyId]/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc, collection, getDocs, query, orderBy as firestoreOrderBy } from "firebase/firestore"; // Corrected: query
+import { doc, getDoc, collection, getDocs, query, orderBy as firestoreOrderBy, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Story, StoryPart } from "@/types";
+import type { Story, StoryNode } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { addStoryPartAction, type AddStoryPartActionInput } from "./actions";
+import { addStoryNodeAction } from "./actions";
+import type { AddStoryNodeActionInput } from "./actions";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
+// Textarea removed
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Loader2, ArrowLeft, PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import Link from "next/link";
+import RichTextEditor from "@/components/editor/RichTextEditor";
 
-const addPartFormSchema = z.object({
-  newPartContent: z.string().min(10, "Part content must be at least 10 characters"),
+const addNodeFormSchema = z.object({
+  newNodeContent: z.string().min(10, "Node content must be at least 10 characters (HTML allowed)."),
+  parentNodeId: z.string().min(1, "You must select a parent node to branch from."),
 });
-type AddPartFormValues = z.infer<typeof addPartFormSchema>;
+type AddNodeFormValues = z.infer<typeof addNodeFormSchema>;
 
 export default function EditStoryPage() {
   const params = useParams();
@@ -35,100 +38,112 @@ export default function EditStoryPage() {
   const { toast } = useToast();
 
   const [story, setStory] = useState<Story | null>(null);
-  const [storyParts, setStoryParts] = useState<StoryPart[]>([]);
+  const [storyNodes, setStoryNodes] = useState<StoryNode[]>([]);
   const [isLoadingPage, setIsLoadingPage] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const form = useForm<AddPartFormValues>({
-    resolver: zodResolver(addPartFormSchema),
+  const form = useForm<AddNodeFormValues>({
+    resolver: zodResolver(addNodeFormSchema),
     defaultValues: {
-      newPartContent: "",
+      newNodeContent: "<p></p>", // Start with an empty paragraph for Tiptap
+      parentNodeId: "",
     },
   });
+  
+  const fetchStoryAndNodes = useCallback(async () => {
+    if (!currentUser || !storyId || !db) return;
+    setIsLoadingPage(true);
+    setError(null);
+    try {
+      const storyRef = doc(db, "stories", storyId);
+      const storySnap = await getDoc(storyRef);
+
+      if (storySnap.exists()) {
+        const storyData = storySnap.data() as Omit<Story, 'id'>;
+        if (storyData.authorId !== currentUser.uid) {
+          setError("You are not authorized to edit this story.");
+          setStory(null);
+          setIsLoadingPage(false);
+          return;
+        }
+        setStory({ 
+          id: storySnap.id, 
+          ...storyData,
+          createdAt: Number(storyData.createdAt),
+          updatedAt: Number(storyData.updatedAt),
+         });
+
+        const nodesCollectionRef = collection(db, "stories", storyId, "nodes");
+        const nodesQuery = query(nodesCollectionRef, firestoreOrderBy("order", "asc"));
+        const nodesSnapshot = await getDocs(nodesQuery);
+        const fetchedNodes: StoryNode[] = [];
+        nodesSnapshot.forEach((nodeDoc) => {
+          const nodeData = nodeDoc.data();
+          fetchedNodes.push({
+            id: nodeDoc.id,
+            ...nodeData,
+             order: Number(nodeData.order),
+             // Ensure all fields from StoryNode type are mapped
+             upvotes: nodeData.upvotes || 0,
+             downvotes: nodeData.downvotes || 0,
+             votedBy: nodeData.votedBy || {},
+             commentCount: nodeData.commentCount || 0,
+          } as StoryNode);
+        });
+        setStoryNodes(fetchedNodes);
+        if (fetchedNodes.length > 0 && !form.getValues('parentNodeId')) {
+          // Default parentNodeId to the last node if not already set
+          form.setValue('parentNodeId', fetchedNodes[fetchedNodes.length - 1].id);
+        }
+
+      } else {
+        setError("Story not found.");
+        setStory(null);
+      }
+    } catch (e) {
+      console.error("Error fetching story and nodes:", e);
+      setError("Failed to load story data.");
+    }
+    setIsLoadingPage(false);
+  }, [storyId, currentUser, db, form]);
+
 
   useEffect(() => {
     if (!authLoading && !currentUser) {
       router.push(`/login?redirect=/stories/edit/${storyId}`);
       return;
     }
-
-    if (storyId && db && currentUser) {
-      const fetchStoryAndParts = async () => {
-        setIsLoadingPage(true);
-        setError(null);
-        try {
-          const storyRef = doc(db, "stories", storyId);
-          const storySnap = await getDoc(storyRef);
-
-          if (storySnap.exists()) {
-            const storyData = storySnap.data() as Omit<Story, 'id'>;
-            if (storyData.authorId !== currentUser.uid) {
-              setError("You are not authorized to edit this story.");
-              setStory(null);
-              setIsLoadingPage(false);
-              return;
-            }
-            setStory({ 
-              id: storySnap.id, 
-              ...storyData,
-              createdAt: Number(storyData.createdAt),
-              updatedAt: Number(storyData.updatedAt),
-             });
-
-            const partsCollectionRef = collection(db, "stories", storyId, "parts");
-            const partsQuery = query(partsCollectionRef, firestoreOrderBy("order", "asc")); // Corrected: query
-            const partsSnapshot = await getDocs(partsQuery);
-            const fetchedParts: StoryPart[] = [];
-            partsSnapshot.forEach((partDoc) => fetchedParts.push({ id: partDoc.id, ...partDoc.data() } as StoryPart));
-            setStoryParts(fetchedParts);
-          } else {
-            setError("Story not found.");
-            setStory(null);
-          }
-        } catch (e) {
-          console.error("Error fetching story and parts:", e);
-          setError("Failed to load story data.");
-        }
-        setIsLoadingPage(false);
-      };
-      fetchStoryAndParts();
-    } else if (!db) {
+    if (currentUser && storyId && db) {
+      fetchStoryAndNodes();
+    } else if (!db && !authLoading) {
         setError("Database service is unavailable.");
         setIsLoadingPage(false);
     }
-  }, [storyId, currentUser, authLoading, router]);
+  }, [storyId, currentUser, authLoading, router, db, fetchStoryAndNodes]);
 
-  async function onAddPartSubmit(values: AddPartFormValues) {
+
+  async function onAddNodeSubmit(values: AddNodeFormValues) {
     if (!currentUser || !story) return;
     setIsSubmitting(true);
 
-    const actionInput: AddStoryPartActionInput = {
+    const actionInput: AddStoryNodeActionInput = {
       storyId: story.id,
       authorId: currentUser.uid,
-      newPartContent: values.newPartContent,
+      authorUsername: currentUser.displayName || currentUser.email || "Anonymous",
+      authorProfilePictureUrl: currentUser.photoURL || "",
+      newNodeContent: values.newNodeContent,
+      parentNodeId: values.parentNodeId,
     };
 
-    const result = await addStoryPartAction(actionInput);
+    const result = await addStoryNodeAction(actionInput);
 
     if (result.error) {
-      toast({ title: "Error Adding Part", description: result.error, variant: "destructive" });
+      toast({ title: "Error Adding Node", description: result.error, variant: "destructive" });
     } else if (result.success) {
-      toast({ title: "Part Added!", description: result.success });
-      form.reset();
-      // Re-fetch parts to update the list
-      if (db) { // Re-check db to satisfy TypeScript
-        const partsCollectionRef = collection(db, "stories", storyId, "parts");
-        const partsQuery = query(partsCollectionRef, firestoreOrderBy("order", "asc")); // Corrected: query
-        const partsSnapshot = await getDocs(partsQuery);
-        const fetchedParts: StoryPart[] = [];
-        partsSnapshot.forEach((partDoc) => fetchedParts.push({ id: partDoc.id, ...partDoc.data() } as StoryPart));
-        setStoryParts(fetchedParts); // Update local state
-        // Also update story's updatedAt and partCount from result if provided by action
-        if (result.updatedStoryData) {
-            setStory(prevStory => prevStory ? {...prevStory, ...result.updatedStoryData} : null);
-        }
-      }
+      toast({ title: "Node Added!", description: result.success });
+      form.reset({ newNodeContent: "<p></p>", parentNodeId: values.parentNodeId }); // Reset content, keep parent
+      fetchStoryAndNodes(); // Re-fetch to update the list and story data
     }
     setIsSubmitting(false);
   }
@@ -154,28 +169,31 @@ export default function EditStoryPage() {
       
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline">Existing Parts</CardTitle>
-          <CardDescription>Review the current parts of your story.</CardDescription>
+          <CardTitle className="font-headline">Existing Story Nodes</CardTitle>
+          <CardDescription>Review the current nodes of your story. New nodes will branch from a selected parent.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {storyParts.length > 0 ? (
-            storyParts.map((part) => (
-              <div key={part.id} className="p-4 border rounded-md bg-muted/30">
-                <h3 className="text-lg font-semibold text-primary mb-1">Part {part.order}</h3>
-                <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-                  {part.content.split('\\n').map((paragraph, pIndex) => (
-                    paragraph.trim() ? <p key={`${part.id}-p-${pIndex}`}>{paragraph}</p> : null
-                  ))}
+          {storyNodes.length > 0 ? (
+            storyNodes.map((node, index) => (
+              <div key={node.id} className="p-4 border rounded-md bg-muted/30">
+                <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-lg font-semibold text-primary">
+                        Node {index + 1} (ID: ...{node.id.slice(-6)})
+                        {node.parentId && <span className="text-xs text-muted-foreground ml-2">(Parent: ...{node.parentId.slice(-6)})</span>}
+                    </h3>
+                    {/* Placeholder for Edit Node button */}
                 </div>
+                <div 
+                    className="prose prose-sm dark:prose-invert max-w-none"
+                    dangerouslySetInnerHTML={{ __html: node.content }} 
+                />
                 <p className="text-xs text-muted-foreground mt-2">
-                  Last updated: {new Date(part.updatedAt).toLocaleString()}
+                  Created: {new Date(node.createdAt).toLocaleString()}
                 </p>
-                {/* Placeholder for Edit Part button */}
-                {/* <Button variant="outline" size="sm" className="mt-2">Edit Part</Button> */}
               </div>
             ))
           ) : (
-            <p>No parts have been added to this story yet.</p>
+            <p>No nodes have been added to this story yet, besides the initial one (which is not shown here for editing).</p>
           )}
         </CardContent>
       </Card>
@@ -184,33 +202,59 @@ export default function EditStoryPage() {
 
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="font-headline">Add New Part</CardTitle>
-          <CardDescription>Continue your story by adding a new part.</CardDescription>
+          <CardTitle className="font-headline">Add New Story Node</CardTitle>
+          <CardDescription>Continue your story by adding a new node, branching from an existing one.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onAddPartSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onAddNodeSubmit)} className="space-y-6">
               <FormField
                 control={form.control}
-                name="newPartContent"
+                name="parentNodeId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-lg">Content for New Part</FormLabel>
+                    <FormLabel className="text-lg">Branch from Node</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select parent node" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {storyNodes.map((node, index) => (
+                          <SelectItem key={node.id} value={node.id}>
+                            Node {index + 1}: "{node.content.replace(/<[^>]+>/g, '').substring(0, 30)}..." (ID: ...{node.id.slice(-6)})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Choose an existing node to add your new contribution after.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="newNodeContent"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-lg">Content for New Node</FormLabel>
                     <FormControl>
-                      <Textarea
-                        placeholder="Continue your narrative here..."
-                        className="min-h-[200px] resize-y"
-                        {...field}
+                      <RichTextEditor
+                        initialContent={field.value}
+                        onChange={field.onChange}
                       />
                     </FormControl>
+                     <FormDescription>Write your contribution here. Use the toolbar for formatting.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <div className="flex justify-end">
-                <Button type="submit" disabled={isSubmitting}>
+                <Button type="submit" disabled={isSubmitting || !form.formState.isValid}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Part
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Node
                 </Button>
               </div>
             </form>
