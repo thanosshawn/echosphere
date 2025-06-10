@@ -58,13 +58,27 @@ export async function addCommentToStoryNodeAction(
     batch.set(commentRef, newComment);
     console.log("[addCommentToStoryNodeAction] Comment added to batch:", newComment);
 
-    batch.update(nodeRef, { commentCount: FieldValue.increment(1) });
+    // Debugging FieldValue.increment
+    console.log("[addCommentToStoryNodeAction] Type of FieldValue:", typeof FieldValue);
+    if (FieldValue && typeof FieldValue.increment === 'function') {
+      console.log("[addCommentToStoryNodeAction] FieldValue.increment is a function. Proceeding.");
+      batch.update(nodeRef, { commentCount: FieldValue.increment(1) });
+    } else {
+      console.error("[addCommentToStoryNodeAction] CRITICAL: FieldValue.increment is NOT a function. Type:", typeof FieldValue?.increment);
+      console.error("[addCommentToStoryNodeAction] FieldValue object:", FieldValue);
+      // Attempt to see what FieldValue contains if it's an object
+      if (typeof FieldValue === 'object' && FieldValue !== null) {
+        console.error("[addCommentToStoryNodeAction] Keys of FieldValue:", Object.keys(FieldValue));
+      }
+      throw new Error("Firestore FieldValue.increment is not available or not a function.");
+    }
     console.log("[addCommentToStoryNodeAction] Node commentCount increment added to batch for node:", nodeRef.path);
+    
 
     await batch.commit();
     console.log("[addCommentToStoryNodeAction] Batch commit successful. Comment ID:", commentRef.id);
 
-    revalidatePath(`/stories/${storyId}`); // This should be safe, but good to log before/after if issues persist
+    revalidatePath(`/stories/${storyId}`); 
     console.log("[addCommentToStoryNodeAction] Path revalidated:", `/stories/${storyId}`);
     
     return { success: "Comment posted!", commentId: commentRef.id };
@@ -76,10 +90,8 @@ export async function addCommentToStoryNodeAction(
     console.error("Timestamp:", new Date().toISOString());
     console.error("Story ID:", storyId, "Node ID:", nodeId, "Author ID:", authorId);
     
-    // Log the error object itself for more details
     console.error("Full Error Object:", error);
 
-    // Attempt to serialize for more properties, useful for non-standard errors
     try {
       console.error("Serialized Error Object:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
     } catch (e) {
@@ -139,7 +151,7 @@ async function handleVote(
         throw new Error("Story node not found.");
       }
 
-      const nodeData = nodeDoc.data() as StoryNode; // Assume StoryNode type
+      const nodeData = nodeDoc.data() as StoryNode; 
       const currentVotedBy = nodeData.votedBy || {};
       let newUpvotes = nodeData.upvotes || 0;
       let newDownvotes = nodeData.downvotes || 0;
@@ -176,6 +188,16 @@ async function handleVote(
           console.log(`[handleVote] User ${userId} downvoted.`);
         }
       }
+
+      // Debugging FieldValue.increment for votes (if used, currently not but good practice)
+      // console.log("[handleVote] Type of FieldValue:", typeof FieldValue);
+      // if (FieldValue && typeof FieldValue.increment === 'function') {
+      //   console.log("[handleVote] FieldValue.increment is a function.");
+      // } else {
+      //   console.error("[handleVote] CRITICAL: FieldValue.increment is NOT a function. Type:", typeof FieldValue?.increment);
+      //   throw new Error("Firestore FieldValue.increment is not available or not a function for voting.");
+      // }
+
       transaction.update(nodeRef, {
         upvotes: newUpvotes,
         downvotes: newDownvotes,
@@ -219,4 +241,3 @@ export async function upvoteStoryNodeAction(values: VoteActionInput): Promise<{ 
 export async function downvoteStoryNodeAction(values: VoteActionInput): Promise<{ success?: string; error?: string }> {
   return handleVote(values, 'downvote');
 }
-
