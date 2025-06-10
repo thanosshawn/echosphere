@@ -1,3 +1,4 @@
+
 // src/app/settings/page.tsx
 "use client";
 
@@ -28,25 +29,25 @@ export default function SettingsPage() {
       title: "Profile",
       description: "Update your personal information, bio, and profile picture.",
       icon: <User className="h-5 w-5 text-primary" />,
-      link: "/settings/profile",
+      link: "/settings/profile", // Assuming this page exists or will be created
     },
     {
       title: "Account",
       description: "Manage your email, password, and account security settings.",
       icon: <Shield className="h-5 w-5 text-primary" />,
-      link: "/settings/account",
+      link: "/settings/account", // Assuming this page exists or will be created
     },
     {
       title: "Notifications",
       description: "Configure your notification preferences.",
       icon: <Bell className="h-5 w-5 text-primary" />,
-      link: "/settings/notifications",
+      link: "/settings/notifications", // Assuming this page exists or will be created
     },
     {
       title: "Appearance",
       description: "Customize the look and feel of EchoSphere (e.g., theme).",
       icon: <Palette className="h-5 w-5 text-primary" />,
-      link: "/settings/appearance",
+      link: "/settings/appearance", // Updated link
     },
   ];
 
