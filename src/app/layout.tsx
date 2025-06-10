@@ -5,6 +5,7 @@ import { Providers } from './providers';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { Toaster } from "@/components/ui/toaster";
+import GlobalChat from '@/components/chat/GlobalChat'; // Import the GlobalChat component
 
 export const metadata: Metadata = {
   title: 'EchoSphere - Share Your Voice',
@@ -33,6 +34,7 @@ export default function RootLayout({
           </main>
           <Footer />
           <Toaster />
+          <GlobalChat /> {/* Add GlobalChat component here */}
         </Providers>
       </body>
     </html>

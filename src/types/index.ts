@@ -75,3 +75,12 @@ export interface Notification {
   highlight?: boolean; // From GenAI
   link?: string; // URL to navigate to
 }
+
+export interface GlobalChatMessage {
+  id: string;
+  userId: string;
+  username: string;
+  avatarUrl?: string | null;
+  text: string;
+  createdAt: firebase.firestore.Timestamp | Date; // Storing as Date on client after fetch
+}
