@@ -4,7 +4,7 @@
 
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
-import { supabase } from '@/lib/supabase'; // Corrected import path
+import { supabase } from '@/lib/supabase';
 import { writeBatch, doc, collection } from 'firebase/firestore';
 import type { Story, StoryNode } from '@/types';
 import { revalidatePath } from 'next/cache';
@@ -30,11 +30,11 @@ export type CreateStoryFormValues = FormData;
 export async function createStoryAction(formData: CreateStoryFormValues): Promise<{ success?: string; error?: string; storyId?: string | null }> {
   if (!db) {
     console.error("Firestore database is not initialized.");
-    return { error: "Database service is unavailable.", storyId: null };
+    return { error: "Database service is unavailable. Please check Firebase configuration.", storyId: null };
   }
    if (!supabase) {
-    console.error("Supabase client is not initialized.");
-    return { error: "Storage service is unavailable.", storyId: null };
+    console.error("Supabase client is not initialized. Critical Error: Ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables are correctly set in your .env.local file and the development server was restarted.");
+    return { error: "Storage service is unavailable. Please check Supabase configuration and environment variables.", storyId: null };
   }
 
   const rawData = {
@@ -76,7 +76,7 @@ export async function createStoryAction(formData: CreateStoryFormValues): Promis
 
     if (uploadError) {
       console.error("Error uploading cover image to Supabase:", uploadError);
-      return { error: "Failed to upload cover image. Please try again.", storyId: null };
+      return { error: `Failed to upload cover image: ${uploadError.message}. Please try again.`, storyId: null };
     }
     // Construct the public URL. Adjust if your Supabase setup is different.
     const { data: publicUrlData } = supabase.storage.from('story-covers').getPublicUrl(filePath);
