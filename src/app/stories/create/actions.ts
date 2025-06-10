@@ -4,15 +4,14 @@
 
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
-import { addDoc, collection, serverTimestamp as firestoreServerTimestamp, writeBatch, doc } from 'firebase/firestore';
+import { writeBatch, doc, collection } from 'firebase/firestore';
 import type { Story, StoryPart } from '@/types';
 import { revalidatePath } from 'next/cache';
 
 // Schema for input to the server action matches the form values plus author info
-// 'content' here refers to the content of the *first part* of the story.
 const createStoryServerActionSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters").max(150, "Title must be less than 150 characters"),
-  initialContent: z.string().min(50, "Story content must be at least 50 characters"), // Renamed for clarity
+  initialContent: z.string().min(50, "Story content must be at least 50 characters"),
   category: z.string().min(1, "Please select a category"),
   tags: z.string().optional(),
   status: z.enum(["draft", "published"]),
@@ -56,12 +55,12 @@ export async function createStoryAction(values: CreateStoryActionInput): Promise
       category,
       status,
       createdAt: currentTime,
-      updatedAt: currentTime, // Will be updated if parts change
+      updatedAt: currentTime, 
       views: 0,
       likes: 0,
       commentCount: 0,
-      partCount: 1, // Starts with one part
-      // firstPartExcerpt: initialContent.substring(0, 150) + (initialContent.length > 150 ? "..." : ""), // Example excerpt
+      partCount: 1, 
+      firstPartExcerpt: initialContent.substring(0, 150) + (initialContent.length > 150 ? "..." : ""),
     };
     batch.set(newStoryRef, storyToCreate);
 

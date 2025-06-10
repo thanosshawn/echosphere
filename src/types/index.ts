@@ -16,7 +16,6 @@ export interface Story {
   authorUsername: string; 
   authorProfilePictureUrl?: string;
   title: string;
-  // content: string; // Rich text (HTML or JSON from Tiptap) - MOVED TO StoryPart
   coverImageUrl?: string; // From Supabase
   tags: string[];
   category: string;
@@ -26,8 +25,8 @@ export interface Story {
   views: number;
   likes: number;
   commentCount: number;
-  partCount?: number; // Optional: denormalized count of parts
-  firstPartExcerpt?: string; // Optional: denormalized excerpt from the first part
+  partCount: number; 
+  firstPartExcerpt: string; 
 }
 
 export interface StoryPart {
@@ -69,3 +68,4 @@ export interface Notification {
   highlight?: boolean; // From GenAI
   link?: string; // URL to navigate to
 }
+

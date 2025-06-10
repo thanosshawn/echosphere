@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, query, where, orderBy as firestoreOrderBy } from "firebase/firestore";
+import { collection, getDocs, query, where, orderBy as firestoreOrderBy, doc, getDoc } from "firebase/firestore"; // Added doc, getDoc
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -45,25 +45,52 @@ export default function UserProfilePage() {
           );
           const storySnapshots = await getDocs(storiesQuery);
           const fetchedStories: Story[] = [];
-          storySnapshots.forEach((docSnap) => { // Renamed doc to docSnap to avoid conflict
+          storySnapshots.forEach((docSnap) => {
             const data = docSnap.data();
             fetchedStories.push({
               id: docSnap.id,
               ...data,
               createdAt: Number(data.createdAt),
               updatedAt: Number(data.updatedAt),
-              // firstPartExcerpt: data.firstPartExcerpt, // if denormalized
-            } as Story); // Cast as Story, ensure all fields match
+              partCount: data.partCount || 0,
+              firstPartExcerpt: data.firstPartExcerpt || "No excerpt available.",
+            } as Story);
           });
           setUserStories(fetchedStories);
 
           // Profile Data Logic
           if (currentUser && currentUser.uid === userId) {
-            setProfileData(currentUser);
+             // Attempt to get richer profile data from a 'users' collection if it exists
+            const userDocRef = doc(db, "users", userId);
+            const userDocSnap = await getDoc(userDocRef);
+            if (userDocSnap.exists()) {
+                const dbUser = userDocSnap.data();
+                setProfileData({
+                    ...currentUser, // Base from auth
+                    username: dbUser.username || currentUser.displayName,
+                    bio: dbUser.bio,
+                    createdAt: dbUser.createdAt ? (dbUser.createdAt.toDate ? dbUser.createdAt.toDate() : new Date(dbUser.createdAt)) : undefined,
+                    // any other fields from your 'users' collection
+                } as UserProfileType);
+            } else {
+                setProfileData(currentUser); // Fallback to auth data
+            }
           } else {
-            // For other users, attempt to get basic info from one of their stories
-            // A dedicated 'users' collection is better for full profiles.
-             if (fetchedStories.length > 0) {
+            // For other users, attempt to get profile from a 'users' collection
+            const userDocRef = doc(db, "users", userId);
+            const userDocSnap = await getDoc(userDocRef);
+            if (userDocSnap.exists()) {
+                const dbUser = userDocSnap.data();
+                setProfileData({
+                    uid: userId,
+                    displayName: dbUser.displayName || `User ${userId.substring(0,6)}`,
+                    email: dbUser.email, // Might not be public
+                    photoURL: dbUser.photoURL,
+                    username: dbUser.username,
+                    bio: dbUser.bio,
+                    createdAt: dbUser.createdAt ? (dbUser.createdAt.toDate ? dbUser.createdAt.toDate() : new Date(dbUser.createdAt)) : undefined,
+                } as UserProfileType);
+            } else if (fetchedStories.length > 0) { // Fallback to story author info
                 setProfileData({
                     uid: userId,
                     displayName: fetchedStories[0].authorUsername,
@@ -72,13 +99,8 @@ export default function UserProfilePage() {
                     createdAt: undefined, 
                 });
             } else {
-                // If no stories, create a minimal profile or indicate user might not exist publicly
-                // This would ideally fetch from a 'users' collection
-                // const userDocRef = doc(db, "users", userId); (Example)
-                // const userDocSnap = await getDoc(userDocRef);
-                // if (userDocSnap.exists()) setProfileData({ uid: userId, ...userDocSnap.data() } as UserProfileType);
-                // else setError("User profile not found.");
-                setProfileData({uid: userId, displayName: `User ${userId.substring(0,6)}`, email: null});
+                setError("User profile not found.");
+                setProfileData(null);
             }
           }
 
@@ -101,6 +123,7 @@ export default function UserProfilePage() {
       router.push("/login?redirect=/profile/" + userId);
       return;
     }
+    // Placeholder for follow/unfollow logic
     setIsFollowing(!isFollowing); 
   };
 
@@ -108,11 +131,11 @@ export default function UserProfilePage() {
     return <div className="flex items-center justify-center min-h-[calc(100vh-10rem)]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
   }
 
-  if (error) {
+  if (error && !profileData) { // Only show full error if no profileData could be set
     return <div className="text-center py-10 text-destructive">{error}</div>;
   }
   
-  if (!profileData || !profileData.uid) {
+  if (!profileData || !profileData.uid) { // This check might be redundant if error above catches it
     return <div className="text-center py-10">User profile not found or user has no public activity.</div>;
   }
 
@@ -132,7 +155,7 @@ export default function UserProfilePage() {
             </Avatar>
             <div className="mt-4 md:mt-0 flex-grow text-center md:text-left">
               <h1 className="text-3xl md:text-4xl font-headline font-bold">{profileData.displayName || profileData.username || `User ${profileData.uid.substring(0,6)}`}</h1>
-              {profileData.username && <p className="text-md text-muted-foreground">@{profileData.username}</p>}
+              {profileData.username && profileData.displayName !== profileData.username && <p className="text-md text-muted-foreground">@{profileData.username}</p>}
                <div className="flex items-center justify-center md:justify-start space-x-4 mt-2 text-sm text-muted-foreground">
                 <span><strong className="text-foreground">0</strong> Followers</span>
                 <span><strong className="text-foreground">0</strong> Following</span>
@@ -157,7 +180,7 @@ export default function UserProfilePage() {
           {profileData.bio && (
             <div className="p-6 border-t">
               <h2 className="text-sm font-semibold uppercase text-muted-foreground mb-1">Bio</h2>
-              <p className="text-foreground leading-relaxed">{profileData.bio}</p>
+              <p className="text-foreground leading-relaxed whitespace-pre-wrap">{profileData.bio}</p>
             </div>
           )}
 
@@ -198,12 +221,7 @@ export default function UserProfilePage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="flex-grow text-sm text-muted-foreground">
-                     {/* Excerpt removed as content is now in parts. Consider denormalizing 'firstPartExcerpt' or fetching. */}
-                     {story.firstPartExcerpt ? (
-                        <p className="line-clamp-2">{story.firstPartExcerpt}</p>
-                     ) : (
-                        <p className="line-clamp-2 italic text-muted-foreground/70">No excerpt available.</p>
-                     )}
+                    <p className="line-clamp-2">{story.firstPartExcerpt}</p>
                   </CardContent>
                   <CardFooter className="text-xs text-muted-foreground flex justify-between items-center border-t pt-3 mt-2">
                      <div className="flex items-center gap-2">

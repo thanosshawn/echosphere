@@ -120,9 +120,19 @@ export default function StoryDetailPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
-      <Button variant="outline" onClick={() => router.push('/stories')} className="mb-6">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Stories
-      </Button>
+      <div className="flex justify-between items-center mb-6">
+        <Button variant="outline" onClick={() => router.push('/stories')}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Stories
+        </Button>
+        {isAuthor && (
+          <Button variant="outline" asChild>
+            <Link href={`/stories/edit/${story.id}`}> 
+              <Edit className="mr-1.5 h-4 w-4" /> Edit Story
+            </Link>
+          </Button>
+        )}
+      </div>
+      
 
       <article>
         {story.coverImageUrl && (
@@ -163,14 +173,6 @@ export default function StoryDetailPage() {
               <span>{story.authorUsername || "Anonymous"}</span>
             </Link>
             <span className="flex items-center"><CalendarDays className="mr-1.5 h-4 w-4" /> Published on {new Date(story.createdAt).toLocaleDateString()}</span>
-            {isAuthor && (
-              <Button variant="outline" size="sm" asChild>
-                {/* TODO: Link to an edit page that allows adding/editing parts */}
-                <Link href={`/stories/edit/${story.id}`}> 
-                  <Edit className="mr-1.5 h-4 w-4" /> Edit Story
-                </Link>
-              </Button>
-            )}
           </div>
         </header>
 
@@ -180,7 +182,7 @@ export default function StoryDetailPage() {
           {storyParts.length > 0 ? (
             storyParts.map((part, index) => (
               <section key={part.id} className="story-part">
-                {storyParts.length > 1 && ( // Only show part indicator if more than one part
+                {storyParts.length > 1 && ( 
                   <h3 className="text-lg font-semibold text-muted-foreground mb-2">Part {part.order}</h3>
                 )}
                 {part.content.split('\n').map((paragraph, pIndex) => (

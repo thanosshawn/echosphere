@@ -31,7 +31,6 @@ export default function StoriesPage() {
       setError(null);
       try {
         const storiesCollectionRef = collection(db, "stories");
-        // Query to get published stories, ordered by creation date
         const q = firestoreQuery(
           storiesCollectionRef, 
           where("status", "==", "published"), 
@@ -43,12 +42,11 @@ export default function StoriesPage() {
           const data = doc.data();
           fetchedStories.push({
             id: doc.id,
+            ...data,
+            // Ensure required fields from Story type are present and correctly typed
             authorId: data.authorId,
             authorUsername: data.authorUsername,
-            authorProfilePictureUrl: data.authorProfilePictureUrl,
             title: data.title,
-            // content: data.content, // Content is now in parts subcollection
-            coverImageUrl: data.coverImageUrl,
             tags: data.tags || [],
             category: data.category,
             status: data.status,
@@ -57,8 +55,9 @@ export default function StoriesPage() {
             views: data.views || 0,
             likes: data.likes || 0,
             commentCount: data.commentCount || 0,
-            firstPartExcerpt: data.firstPartExcerpt, // if denormalized
-          } as Story); // Cast as Story, ensure all fields match
+            partCount: data.partCount || 0,
+            firstPartExcerpt: data.firstPartExcerpt || "No excerpt available.",
+          } as Story); 
         });
         setStories(fetchedStories);
       } catch (e) {
@@ -157,12 +156,7 @@ export default function StoriesPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="flex-grow">
-                  {/* Excerpt removed as content is now in parts. Consider denormalizing 'firstPartExcerpt' to Story doc or fetching first part. */}
-                  {story.firstPartExcerpt ? (
-                     <CardDescription className="line-clamp-3">{story.firstPartExcerpt}</CardDescription>
-                  ) : (
-                     <CardDescription className="line-clamp-3 text-muted-foreground/70 italic">No excerpt available.</CardDescription>
-                  )}
+                  <CardDescription className="line-clamp-3">{story.firstPartExcerpt}</CardDescription>
                   <div className="mt-3 space-x-2">
                     {story.tags?.slice(0,3).map(tag => (
                       <Link key={tag} href={`/tags/${tag.toLowerCase()}`} className="text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded-full hover:bg-primary hover:text-primary-foreground transition-colors">
