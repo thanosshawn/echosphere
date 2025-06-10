@@ -22,12 +22,16 @@ export type AddCommentToStoryNodeInput = z.infer<typeof addCommentToStoryNodeSch
 export async function addCommentToStoryNodeAction(
   values: AddCommentToStoryNodeInput
 ): Promise<{ success?: string; error?: string; commentId?: string | null }> {
+  console.log("[addCommentToStoryNodeAction] Received values:", JSON.stringify(values, null, 2));
+
   if (!db) {
+    console.error("[addCommentToStoryNodeAction] Firestore (db) not available.");
     return { error: "Database service is unavailable.", commentId: null };
   }
   const validatedFields = addCommentToStoryNodeSchema.safeParse(values);
   if (!validatedFields.success) {
     const errorMessages = Object.values(validatedFields.error.flatten().fieldErrors).flat().join(', ');
+    console.error("[addCommentToStoryNodeAction] Validation Error:", errorMessages, "Input:", values);
     return { error: `Invalid comment data: ${errorMessages}`, commentId: null };
   }
 
@@ -35,6 +39,7 @@ export async function addCommentToStoryNodeAction(
   const currentTime = Date.now();
 
   try {
+    console.log("[addCommentToStoryNodeAction] Attempting to post comment. StoryID:", storyId, "NodeID:", nodeId, "AuthorID:", authorId);
     const batch = writeBatch(db);
     const commentRef = doc(collection(db, "stories", storyId, "nodes", nodeId, "comments"));
     const nodeRef = doc(db, "stories", storyId, "nodes", nodeId);
@@ -44,23 +49,53 @@ export async function addCommentToStoryNodeAction(
       nodeId,
       authorId,
       authorUsername,
-      authorProfilePictureUrl: authorProfilePictureUrl ?? null, // Changed to use ?? null
-      text, 
+      authorProfilePictureUrl: authorProfilePictureUrl ?? null,
+      text,
       createdAt: currentTime,
-      parentId: null, 
-      depth: 0,      
+      parentId: null,
+      depth: 0,
     };
     batch.set(commentRef, newComment);
-    
+    console.log("[addCommentToStoryNodeAction] Comment added to batch:", newComment);
+
     batch.update(nodeRef, { commentCount: FieldValue.increment(1) });
+    console.log("[addCommentToStoryNodeAction] Node commentCount increment added to batch for node:", nodeRef.path);
 
     await batch.commit();
-    revalidatePath(`/stories/${storyId}`); 
+    console.log("[addCommentToStoryNodeAction] Batch commit successful. Comment ID:", commentRef.id);
+
+    revalidatePath(`/stories/${storyId}`); // This should be safe, but good to log before/after if issues persist
+    console.log("[addCommentToStoryNodeAction] Path revalidated:", `/stories/${storyId}`);
+    
     return { success: "Comment posted!", commentId: commentRef.id };
 
-  } catch (error) {
-    console.error("Error posting comment:", error);
-    return { error: "Failed to post comment.", commentId: null };
+  } catch (error: any) 
+  {
+    console.error("--------------------------------------------------------------------");
+    console.error("[addCommentToStoryNodeAction] CRITICAL ERROR POSTING COMMENT:");
+    console.error("Timestamp:", new Date().toISOString());
+    console.error("Story ID:", storyId, "Node ID:", nodeId, "Author ID:", authorId);
+    
+    // Log the error object itself for more details
+    console.error("Full Error Object:", error);
+
+    // Attempt to serialize for more properties, useful for non-standard errors
+    try {
+      console.error("Serialized Error Object:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    } catch (e) {
+      console.error("Failed to serialize error object:", e);
+    }
+
+    const errorMessage = error.message || 'An unknown error occurred.';
+    console.error("Error Message:", errorMessage);
+    if (error.code) { 
+        console.error("Error Code (e.g., Firestore error code):", error.code);
+    }
+    if (error.stack) {
+        console.error("Error Stack Trace:", error.stack);
+    }
+    console.error("--------------------------------------------------------------------");
+    return { error: `Failed to post comment. Server error: ${errorMessage}. Please check server logs for details.`, commentId: null };
   }
 }
 
@@ -77,7 +112,10 @@ async function handleVote(
   values: VoteActionInput,
   voteType: 'upvote' | 'downvote'
 ): Promise<{ success?: string; error?: string }> {
-  if (!db) return { error: "Database service is unavailable." };
+  if (!db) {
+    console.error("[handleVote] Firestore (db) not available.");
+    return { error: "Database service is unavailable." };
+  }
 
   const validatedFields = voteActionSchema.safeParse(values);
   if (!validatedFields.success) {
@@ -85,6 +123,7 @@ async function handleVote(
       .map(errors => errors?.join(', '))
       .filter(Boolean)
       .join('; ');
+    console.error("[handleVote] Validation Error:", errorMessages, "Input:", values);
     return { error: "Invalid vote data: " + (errorMessages || "Unknown error") };
   }
 
@@ -92,39 +131,49 @@ async function handleVote(
   const nodeRef = doc(db, "stories", storyId, "nodes", nodeId);
 
   try {
+    console.log(`[handleVote] User ${userId} attempting to ${voteType} node ${nodeId} in story ${storyId}`);
     await runTransaction(db, async (transaction) => {
       const nodeDoc = await transaction.get(nodeRef);
       if (!nodeDoc.exists()) {
+        console.error(`[handleVote] Node not found: ${nodeRef.path}`);
         throw new Error("Story node not found.");
       }
 
-      const nodeData = nodeDoc.data() as StoryNode;
+      const nodeData = nodeDoc.data() as StoryNode; // Assume StoryNode type
       const currentVotedBy = nodeData.votedBy || {};
       let newUpvotes = nodeData.upvotes || 0;
       let newDownvotes = nodeData.downvotes || 0;
       const userPreviousVote = currentVotedBy[userId];
+      
+      console.log(`[handleVote] Node ${nodeId}: currentVotes(U/D): ${newUpvotes}/${newDownvotes}, userPreviousVote: ${userPreviousVote}`);
 
       if (voteType === 'upvote') {
         if (userPreviousVote === 'upvote') { 
           newUpvotes = Math.max(0, newUpvotes - 1);
           delete currentVotedBy[userId];
+          console.log(`[handleVote] User ${userId} removed upvote.`);
         } else { 
           if (userPreviousVote === 'downvote') {
             newDownvotes = Math.max(0, newDownvotes - 1);
+            console.log(`[handleVote] User ${userId} changed from downvote to upvote. Downvotes adjusted.`);
           }
           newUpvotes += 1;
           currentVotedBy[userId] = 'upvote';
+          console.log(`[handleVote] User ${userId} upvoted.`);
         }
-      } else { 
+      } else { // downvote
         if (userPreviousVote === 'downvote') { 
           newDownvotes = Math.max(0, newDownvotes - 1);
           delete currentVotedBy[userId];
+          console.log(`[handleVote] User ${userId} removed downvote.`);
         } else { 
           if (userPreviousVote === 'upvote') {
             newUpvotes = Math.max(0, newUpvotes - 1);
+            console.log(`[handleVote] User ${userId} changed from upvote to downvote. Upvotes adjusted.`);
           }
           newDownvotes += 1;
           currentVotedBy[userId] = 'downvote';
+          console.log(`[handleVote] User ${userId} downvoted.`);
         }
       }
       transaction.update(nodeRef, {
@@ -133,13 +182,33 @@ async function handleVote(
         votedBy: currentVotedBy,
         updatedAt: Date.now(), 
       });
+      console.log(`[handleVote] Node ${nodeId} updated in transaction. New votes(U/D): ${newUpvotes}/${newDownvotes}`);
     });
 
     revalidatePath(`/stories/${storyId}`);
+    console.log(`[handleVote] Path revalidated: /stories/${storyId}. Vote recorded for node ${nodeId}.`);
     return { success: "Vote recorded!" };
   } catch (error: any) {
-    console.error("Error recording vote:", error);
-    return { error: error.message || "Failed to record vote." };
+    console.error("--------------------------------------------------------------------");
+    console.error("[handleVote] CRITICAL ERROR RECORDING VOTE:");
+    console.error("Timestamp:", new Date().toISOString());
+    console.error("Story ID:", storyId, "Node ID:", nodeId, "User ID:", userId, "Vote Type:", voteType);
+    console.error("Full Error Object:", error);
+    try {
+      console.error("Serialized Error Object:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    } catch (e) {
+      console.error("Failed to serialize error object:", e);
+    }
+    const errorMessage = error.message || 'An unknown error occurred during voting.';
+    console.error("Error Message:", errorMessage);
+    if (error.code) {
+        console.error("Error Code:", error.code);
+    }
+    if (error.stack) {
+        console.error("Error Stack Trace:", error.stack);
+    }
+    console.error("--------------------------------------------------------------------");
+    return { error: `Failed to record vote. Server error: ${errorMessage}. Please check server logs.` };
   }
 }
 
@@ -150,3 +219,4 @@ export async function upvoteStoryNodeAction(values: VoteActionInput): Promise<{ 
 export async function downvoteStoryNodeAction(values: VoteActionInput): Promise<{ success?: string; error?: string }> {
   return handleVote(values, 'downvote');
 }
+
