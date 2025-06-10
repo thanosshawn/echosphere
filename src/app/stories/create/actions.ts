@@ -146,7 +146,7 @@ export async function createStoryAction(formData: CreateStoryFormValues): Promis
   } catch (error)
  {
     console.error("Error creating story and first node in Firestore:", error);
-    return { error: "An error occurred while saving your story. Please try again.", storyId: null };
+    return { error: "An error this  occurred while saving your story. Please try again.", storyId: null };
   }
 }
 
