@@ -8,31 +8,31 @@ import Link from "next/link";
 export default function HomePage() {
   const features = [
     {
-      icon: <Edit3 className="h-10 w-10 text-primary" />,
+      icon: <Edit3 className="h-12 w-12 text-primary" />,
       title: "Create & Share Stories",
       description: "Craft beautiful stories with rich text support and cover images. Share your voice with the world.",
       dataAiHint: "writing quill",
     },
     {
-      icon: <MessageSquareText className="h-10 w-10 text-primary" />,
+      icon: <MessageSquareText className="h-12 w-12 text-primary" />,
       title: "Threaded Discussions",
       description: "Engage in meaningful conversations with a multi-level threaded discussion system.",
       dataAiHint: "speech bubbles",
     },
     {
-      icon: <BellRing className="h-10 w-10 text-primary" />,
+      icon: <BellRing className="h-12 w-12 text-primary" />,
       title: "Real-Time Notifications",
       description: "Stay updated with instant notifications for comments, replies, followers, and likes.",
       dataAiHint: "notification bell",
     },
     {
-      icon: <Users className="h-10 w-10 text-primary" />,
+      icon: <Users className="h-12 w-12 text-primary" />,
       title: "User Profiles",
       description: "Build your identity with public profiles, showcasing your stories and connections.",
       dataAiHint: "profile avatar",
     },
     {
-      icon: <Search className="h-10 w-10 text-primary" />,
+      icon: <Search className="h-12 w-12 text-primary" />,
       title: "Discover Content",
       description: "Easily find stories and users. Filter by tags, popularity, and explore trending topics.",
       dataAiHint: "magnifying glass",
@@ -40,8 +40,8 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="space-y-16">
-      <section className="text-center py-16 md:py-24 bg-muted rounded-lg shadow-md">
+    <div className="space-y-16 md:space-y-24">
+      <section className="text-center py-20 md:py-28 bg-muted rounded-xl shadow-lg">
         <div className="container mx-auto px-4">
           <h1 className="text-5xl md:text-6xl font-headline font-bold mb-6 text-primary">
             Welcome to EchoSphere
@@ -60,9 +60,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="py-16">
+      <section className="py-16 md:py-20">
         <div className="container mx-auto px-4">
-          <h2 className="text-4xl font-headline font-semibold text-center mb-12">
+          <h2 className="text-4xl font-headline font-semibold text-center mb-12 md:mb-16">
             Features That Empower Your Voice
           </h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -85,7 +85,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="py-16 bg-card rounded-lg shadow-md">
+      <section className="py-20 md:py-28 bg-primary/5 rounded-xl shadow-lg">
         <div className="container mx-auto px-4 grid md:grid-cols-2 gap-12 items-center">
           <div>
             <h2 className="text-4xl font-headline font-semibold mb-6">
