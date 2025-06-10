@@ -3,6 +3,7 @@
 "use client";
 
 import Link from 'next/link';
+import { useState } from 'react'; // Import useState
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -22,7 +23,7 @@ import ThemeSwitcher from '@/components/ThemeSwitcher';
 
 const Header = () => {
   const { currentUser, loading, signOut } = useAuth();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // Use useState directly
 
   return (
     <header className="bg-card border-b border-border shadow-sm sticky top-0 z-50">
