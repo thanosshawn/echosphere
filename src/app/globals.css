@@ -95,6 +95,96 @@
     --sidebar-border: 0 0% 25%;
     --sidebar-ring: 195 22% 58%;
   }
+
+  .theme-pink {
+    --background: 340 80% 97%; /* Very light pink */
+    --foreground: 335 30% 25%; /* Dark, desaturated pinkish grey */
+
+    --card: 340 100% 99%; /* Lighter pink for cards */
+    --card-foreground: 335 30% 25%;
+
+    --popover: 340 100% 99%;
+    --popover-foreground: 335 30% 25%;
+
+    --primary: 330 85% 60%; /* Vibrant Pink */
+    --primary-foreground: 0 0% 100%; /* White */
+
+    --secondary: 335 70% 94%; /* Lighter Pink */
+    --secondary-foreground: 330 50% 35%; /* Darker Pink for text on secondary */
+
+    --muted: 340 60% 95%; /* Muted Pink */
+    --muted-foreground: 335 25% 55%; /* Medium desaturated pink */
+
+    --accent: 300 70% 70%; /* Soft Purple/Magenta as accent */
+    --accent-foreground: 0 0% 100%; /* White */
+
+    --destructive: 0 84.2% 60.2%; /* Default destructive red */
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 335 50% 90%; /* Light Pinkish Gray border */
+    --input: 335 60% 92%; /* Slightly lighter pinkish gray for input background */
+    --ring: 330 85% 60%; /* Primary pink for rings */
+
+    --chart-1: 330 80% 70%; /* Pink */
+    --chart-2: 300 70% 75%; /* Purple */
+    --chart-3: 350 80% 75%; /* Light Red/Rose */
+    --chart-4: 20 80% 70%;  /* Peach */
+    --chart-5: 320 75% 65%; /* Magenta */
+    
+    --sidebar-background: 340 80% 98%; 
+    --sidebar-foreground: 335 30% 25%;
+    --sidebar-primary: 330 85% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 300 70% 70%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 335 50% 90%;
+    --sidebar-ring: 330 85% 60%;
+  }
+
+  .theme-green {
+    --background: 100 60% 97%; /* Very light green */
+    --foreground: 110 25% 20%; /* Dark, slightly desaturated green/grey */
+
+    --card: 100 70% 99%; /* Lighter green for cards */
+    --card-foreground: 110 25% 20%;
+
+    --popover: 100 70% 99%;
+    --popover-foreground: 110 25% 20%;
+
+    --primary: 140 60% 45%; /* Forest Green / Vibrant Green */
+    --primary-foreground: 0 0% 100%; /* White */
+
+    --secondary: 130 60% 92%; /* Lighter Green */
+    --secondary-foreground: 140 40% 30%; /* Darker Green for text on secondary */
+
+    --muted: 100 50% 95%; /* Muted Green */
+    --muted-foreground: 110 20% 50%; /* Medium desaturated green */
+
+    --accent: 45 80% 60%; /* Soft Yellow/Gold as accent */
+    --accent-foreground: 45 100% 15%; /* Dark text on yellow accent */
+
+    --destructive: 0 84.2% 60.2%; /* Default destructive red */
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 110 40% 88%; /* Light Greenish Gray border */
+    --input: 110 50% 91%; /* Slightly lighter greenish gray for input background */
+    --ring: 140 60% 45%; /* Primary green for rings */
+
+    --chart-1: 140 55% 55%; /* Green */
+    --chart-2: 100 50% 60%; /* Lime Green */
+    --chart-3: 170 50% 50%; /* Teal */
+    --chart-4: 80 40% 65%;  /* Olive */
+    --chart-5: 45 70% 65%;  /* Yellow-Green */
+
+    --sidebar-background: 100 60% 98%; 
+    --sidebar-foreground: 110 25% 20%;
+    --sidebar-primary: 140 60% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 45 80% 60%;
+    --sidebar-accent-foreground: 45 100% 15%;
+    --sidebar-border: 110 40% 88%;
+    --sidebar-ring: 140 60% 45%;
+  }
 }
 
 @layer base {
