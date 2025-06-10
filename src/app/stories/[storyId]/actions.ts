@@ -14,7 +14,7 @@ const addCommentToStoryNodeSchema = z.object({
   authorId: z.string().min(1),
   authorUsername: z.string(),
   authorProfilePictureUrl: z.string().optional().nullable(),
-  text: z.string().min(1, "Comment cannot be empty (HTML allowed)"), // Allow HTML
+  text: z.string().min(1, "Comment cannot be empty (HTML allowed)").refine(value => value !== '<p></p>', { message: "Comment cannot be empty." }),
 });
 
 export type AddCommentToStoryNodeInput = z.infer<typeof addCommentToStoryNodeSchema>;
@@ -44,8 +44,8 @@ export async function addCommentToStoryNodeAction(
       nodeId,
       authorId,
       authorUsername,
-      authorProfilePictureUrl: authorProfilePictureUrl || undefined,
-      text, // Save HTML content
+      authorProfilePictureUrl: authorProfilePictureUrl ?? null, // Changed to use ?? null
+      text, 
       createdAt: currentTime,
       parentId: null, 
       depth: 0,      

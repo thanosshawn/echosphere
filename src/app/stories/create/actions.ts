@@ -4,7 +4,7 @@
 
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
-import { supabase } from '@/lib/supabase'; // Corrected import
+import { supabase } from '@/lib/supabase';
 import { writeBatch, doc, collection } from 'firebase/firestore';
 import type { Story, StoryNode } from '@/types';
 import { revalidatePath } from 'next/cache';
@@ -36,7 +36,6 @@ export async function createStoryAction(formData: CreateStoryFormValues): Promis
     authorId: formData.get('authorId') as string,
     authorUsername: formData.get('authorUsername') as string,
     authorProfilePictureUrl: formData.get('authorProfilePictureUrl') as string | null,
-    // More robust check for File instance
     coverImage: formData.get('coverImage') instanceof File ? formData.get('coverImage') as File : null,
   };
 
@@ -81,10 +80,10 @@ export async function createStoryAction(formData: CreateStoryFormValues): Promis
 
       console.log(`[createStoryAction] Uploading to Supabase path: ${filePath}`);
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('story-covers') // Ensure this bucket exists and has correct policies
+        .from('story-covers') 
         .upload(filePath, coverImage, {
           cacheControl: '3600',
-          upsert: false, // Consider if upsert should be true or false based on your needs
+          upsert: false, 
         });
 
       if (uploadError) {
@@ -111,7 +110,7 @@ export async function createStoryAction(formData: CreateStoryFormValues): Promis
     const storyToCreate: Omit<Story, 'id'> = {
       authorId,
       authorUsername: authorUsername || 'Anonymous',
-      authorProfilePictureUrl: authorProfilePictureUrl || undefined,
+      authorProfilePictureUrl: authorProfilePictureUrl ?? null, // Changed to use ?? null
       title,
       coverImageUrl,
       tags: tags ? tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
@@ -136,7 +135,7 @@ export async function createStoryAction(formData: CreateStoryFormValues): Promis
       storyId: newStoryRef.id,
       authorId,
       authorUsername: authorUsername || 'Anonymous',
-      authorProfilePictureUrl: authorProfilePictureUrl || undefined,
+      authorProfilePictureUrl: authorProfilePictureUrl ?? null, // Changed to use ?? null
       content: initialNodeContent,
       order: currentTime,
       parentId: null,
@@ -153,19 +152,17 @@ export async function createStoryAction(formData: CreateStoryFormValues): Promis
     await batch.commit();
     console.log("[createStoryAction] Firestore batch committed successfully.");
 
-    // Revalidate paths to ensure fresh data is fetched on navigation
     revalidatePath('/stories');
     revalidatePath(`/stories/${newStoryRef.id}`);
-    revalidatePath('/dashboard'); // If dashboard lists stories
+    revalidatePath('/dashboard'); 
     if (authorId) {
-      revalidatePath(`/profile/${authorId}`); // If profile lists stories/contributions
+      revalidatePath(`/profile/${authorId}`); 
     }
     console.log("[createStoryAction] Paths revalidated successfully.");
 
     return { success: status === "published" ? "Your story is now live!" : "Your story has been saved as a draft.", storyId: newStoryRef.id };
   } catch (error: any) {
     console.error("[createStoryAction] UNCAUGHT ERROR in action's try-catch block:", error);
-    // Log more details if available
     if (error.cause) console.error("[createStoryAction] Error Cause:", error.cause);
     if (error.stack) console.error("[createStoryAction] Error Stack:", error.stack);
     

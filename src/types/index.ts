@@ -5,7 +5,7 @@ export interface UserProfile extends FirebaseUser {
   // FirebaseUser already has uid, email, displayName, photoURL
   username?: string | null; // Custom username, can be different from displayName
   bio?: string;
-  profilePictureUrl?: string; // Potentially from Supabase, could override photoURL
+  profilePictureUrl?: string | null; // Potentially from Supabase, could override photoURL
   createdAt?: Date;
   // followerCount, followingCount will be derived or stored separately
 }
@@ -14,7 +14,7 @@ export interface Story {
   id: string;
   authorId: string;
   authorUsername: string;
-  authorProfilePictureUrl?: string;
+  authorProfilePictureUrl?: string | null; // Updated to allow null
   title: string;
   coverImageUrl?: string | null; // From Supabase
   tags: string[];
@@ -24,11 +24,10 @@ export interface Story {
   updatedAt: number; // Store as timestamp, updated when story metadata or any part changes
   views: number;
   likes: number; // Overall story likes, distinct from node votes
-  // commentCount: number; // Overall story comments, might be an aggregation or separate
   nodeCount: number;
   firstNodeExcerpt: string;
-  isLocked: boolean; // New: For story locking
-  canonicalBranchNodeId: string | null; // New: For designating a canonical branch
+  isLocked: boolean;
+  canonicalBranchNodeId: string | null;
 }
 
 export interface StoryNode {
@@ -36,7 +35,7 @@ export interface StoryNode {
   storyId: string;
   authorId: string;
   authorUsername: string; // Denormalized for easier display
-  authorProfilePictureUrl?: string; // Denormalized
+  authorProfilePictureUrl?: string | null; // Updated to allow null
   content: string;
   order: number; // Timestamp for chronological sorting of siblings
   parentId: string | null;
@@ -44,8 +43,8 @@ export interface StoryNode {
   updatedAt: number;
   upvotes: number;
   downvotes: number;
-  votedBy: { [userId: string]: 'upvote' | 'downvote' }; // Map of userId to their vote type
-  commentCount?: number; // Optional: count of comments directly on this node
+  votedBy: { [userId: string]: 'upvote' | 'downvote' };
+  commentCount?: number;
 }
 
 export interface StoryNodeComment {
@@ -54,7 +53,7 @@ export interface StoryNodeComment {
   nodeId: string;
   authorId: string;
   authorUsername: string;
-  authorProfilePictureUrl?: string;
+  authorProfilePictureUrl?: string | null; // Updated to allow null
   text: string;
   parentId: string | null; // For threaded replies to comments
   depth: number;

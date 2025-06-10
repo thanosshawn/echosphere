@@ -53,12 +53,6 @@ export async function addStoryNodeAction(values: AddStoryNodeActionInput): Promi
         }
         const storyData = storySnap.data() as Story;
 
-        // Optional: Add authorization check if only story author can add nodes, or if any authenticated user can.
-        // For now, assuming any authenticated user passed via authorId can contribute.
-        // if (storyData.authorId !== authorId) {
-        //     throw new Error("User is not authorized to add nodes to this story.");
-        // }
-
         const storyNodesCollectionRef = collection(db, 'stories', storyId, 'nodes');
         const newNodeRef = doc(storyNodesCollectionRef); 
         newNodeId = newNodeRef.id;
@@ -67,9 +61,9 @@ export async function addStoryNodeAction(values: AddStoryNodeActionInput): Promi
             storyId: storyId,
             authorId: authorId,
             authorUsername: authorUsername,
-            authorProfilePictureUrl: authorProfilePictureUrl || undefined,
+            authorProfilePictureUrl: authorProfilePictureUrl ?? null, // Changed to use ?? null
             content: newNodeContent,
-            order: currentTime, // Use timestamp for ordering among siblings
+            order: currentTime, 
             parentId: parentNodeId,
             createdAt: currentTime,
             updatedAt: currentTime,
@@ -80,17 +74,10 @@ export async function addStoryNodeAction(values: AddStoryNodeActionInput): Promi
         };
         transaction.set(newNodeRef, newStoryNode);
         
-        // Increment nodeCount on the main story document
         transaction.update(storyRef, {
             nodeCount: FieldValue.increment(1),
             updatedAt: currentTime,
         });
-        // The actual nodeCount will be storyData.nodeCount + 1 after transaction.
-        // We can't read storyData.nodeCount within the transaction after updating it to get the final value
-        // So we have to rely on FieldValue.increment or pass it back differently.
-        // For simplicity, the updatedStoryData might not reflect the absolute final count if multiple transactions happen.
-        // This is a common challenge with transactions and denormalized counters.
-        // For this example, we'll return the value based on pre-transaction data.
         finalNodeCount = (storyData.nodeCount || 0) + 1; 
     });
 
