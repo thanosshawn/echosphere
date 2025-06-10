@@ -4,9 +4,9 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, query, orderBy as firestoreOrderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Story } from "@/types";
+import type { Story, StoryPart } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -26,17 +26,20 @@ export default function StoryDetailPage() {
   const { currentUser } = useAuth();
 
   const [story, setStory] = useState<Story | null>(null);
+  const [storyParts, setStoryParts] = useState<StoryPart[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (storyId && db) {
-      const fetchStory = async () => {
+      const fetchStoryAndParts = async () => {
         setLoading(true);
         setError(null);
         try {
+          // Fetch main story document
           const storyRef = doc(db, "stories", storyId);
           const storySnap = await getDoc(storyRef);
+
           if (storySnap.exists()) {
             const storyData = storySnap.data() as Omit<Story, 'id'>;
             setStory({ 
@@ -45,17 +48,34 @@ export default function StoryDetailPage() {
               createdAt: Number(storyData.createdAt),
               updatedAt: Number(storyData.updatedAt),
             });
+
+            // Fetch story parts from subcollection
+            const partsCollectionRef = collection(db, "stories", storyId, "parts");
+            const partsQuery = firestoreQuery(partsCollectionRef, firestoreOrderBy("order", "asc"));
+            const partsSnapshot = await getDocs(partsQuery);
+            
+            const fetchedParts: StoryPart[] = [];
+            partsSnapshot.forEach((partDoc) => {
+              const partData = partDoc.data();
+              fetchedParts.push({
+                id: partDoc.id,
+                ...partData
+              } as StoryPart);
+            });
+            setStoryParts(fetchedParts);
+
           } else {
             setError("Story not found.");
             setStory(null);
+            setStoryParts([]);
           }
         } catch (e) {
-          console.error("Error fetching story:", e);
+          console.error("Error fetching story and parts:", e);
           setError("Failed to load the story. Please try again later.");
         }
         setLoading(false);
       };
-      fetchStory();
+      fetchStoryAndParts();
     } else if (!db) {
       setError("Database service is unavailable.");
       setLoading(false);
@@ -145,7 +165,8 @@ export default function StoryDetailPage() {
             <span className="flex items-center"><CalendarDays className="mr-1.5 h-4 w-4" /> Published on {new Date(story.createdAt).toLocaleDateString()}</span>
             {isAuthor && (
               <Button variant="outline" size="sm" asChild>
-                <Link href={`/stories/edit/${story.id}`}> {/* TODO: Implement edit page */}
+                {/* TODO: Link to an edit page that allows adding/editing parts */}
+                <Link href={`/stories/edit/${story.id}`}> 
                   <Edit className="mr-1.5 h-4 w-4" /> Edit Story
                 </Link>
               </Button>
@@ -155,12 +176,22 @@ export default function StoryDetailPage() {
 
         <Separator className="my-6" />
 
-        <div 
-          className="prose prose-lg dark:prose-invert max-w-none leading-relaxed"
-        >
-          {story.content.split('\n').map((paragraph, index) => (
-            <p key={index}>{paragraph}</p>
-          ))}
+        <div className="prose prose-lg dark:prose-invert max-w-none leading-relaxed space-y-6">
+          {storyParts.length > 0 ? (
+            storyParts.map((part, index) => (
+              <section key={part.id} className="story-part">
+                {storyParts.length > 1 && ( // Only show part indicator if more than one part
+                  <h3 className="text-lg font-semibold text-muted-foreground mb-2">Part {part.order}</h3>
+                )}
+                {part.content.split('\n').map((paragraph, pIndex) => (
+                  paragraph.trim() ? <p key={`${part.id}-p-${pIndex}`}>{paragraph}</p> : null
+                ))}
+                {index < storyParts.length - 1 && <Separator className="my-6" />}
+              </section>
+            ))
+          ) : (
+            <p>This story doesn't have any content yet.</p>
+          )}
         </div>
 
 
@@ -179,9 +210,9 @@ export default function StoryDetailPage() {
           )}
 
           <div className="flex items-center space-x-6 text-muted-foreground">
-            <span className="flex items-center"><Eye className="mr-1.5 h-5 w-5" /> {story.views} views</span>
-            <span className="flex items-center"><Heart className="mr-1.5 h-5 w-5" /> {story.likes} likes</span>
-            <span className="flex items-center"><MessageSquare className="mr-1.5 h-5 w-5" /> {story.commentCount} comments</span>
+            <span className="flex items-center"><Eye className="mr-1.5 h-5 w-5" /> {story.views || 0} views</span>
+            <span className="flex items-center"><Heart className="mr-1.5 h-5 w-5" /> {story.likes || 0} likes</span>
+            <span className="flex items-center"><MessageSquare className="mr-1.5 h-5 w-5" /> {story.commentCount || 0} comments</span>
           </div>
         </footer>
       </article>
@@ -190,7 +221,7 @@ export default function StoryDetailPage() {
 
       {/* Comments Section Placeholder */}
       <section className="space-y-6">
-        <h2 className="text-2xl font-headline font-semibold">Comments ({story.commentCount})</h2>
+        <h2 className="text-2xl font-headline font-semibold">Comments ({story.commentCount || 0})</h2>
         {currentUser ? (
           <Card>
             <CardHeader>
@@ -220,4 +251,3 @@ export default function StoryDetailPage() {
     </div>
   );
 }
-

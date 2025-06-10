@@ -29,7 +29,7 @@ import { createStoryAction, type CreateStoryActionInput } from "./actions";
 // This schema is for client-side form validation
 const storyFormSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters").max(150, "Title must be less than 150 characters"),
-  content: z.string().min(50, "Story content must be at least 50 characters"),
+  initialContent: z.string().min(50, "Initial story content must be at least 50 characters"), // Renamed for clarity
   category: z.string().min(1, "Please select a category"),
   tags: z.string().optional(), // Comma-separated tags
   status: z.enum(["draft", "published"]),
@@ -54,7 +54,7 @@ export default function CreateStoryPage() {
     resolver: zodResolver(storyFormSchema),
     defaultValues: {
       title: "",
-      content: "",
+      initialContent: "",
       category: "",
       tags: "",
       status: "draft",
@@ -69,16 +69,19 @@ export default function CreateStoryPage() {
     }
     setIsSubmitting(true);
 
+    // Map form values to the server action input type
     const actionInput: CreateStoryActionInput = {
-      ...values,
+      title: values.title,
+      initialContent: values.initialContent, // Pass initialContent
+      category: values.category,
+      tags: values.tags,
+      status: values.status,
       authorId: currentUser.uid,
       authorUsername: currentUser.displayName || currentUser.email || "Anonymous User",
       authorProfilePictureUrl: currentUser.photoURL,
     };
     
     // Note: Cover image upload (values.coverImage) is not implemented in this step.
-    // It would require separate logic to upload to a service like Firebase Storage or Supabase
-    // and then passing the URL to the server action.
 
     const result = await createStoryAction(actionInput);
 
@@ -86,7 +89,7 @@ export default function CreateStoryPage() {
       toast({ title: "Submission Error", description: result.error, variant: "destructive" });
     } else if (result.success && result.storyId) {
       toast({ title: "Story Submitted!", description: result.success });
-      form.reset(); // Reset form on successful submission
+      form.reset(); 
       router.push(`/stories/${result.storyId}`); 
     } else {
       toast({ title: "Unexpected Error", description: "Something went wrong. Please try again.", variant: "destructive" });
@@ -126,12 +129,11 @@ export default function CreateStoryPage() {
 
               <FormField
                 control={form.control}
-                name="content"
+                name="initialContent" // Updated name
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-lg">Your Narrative</FormLabel>
+                    <FormLabel className="text-lg">Your Narrative (First Part)</FormLabel>
                     <FormControl>
-                      {/* Replace with Tiptap editor component for rich text */}
                       <Textarea
                         placeholder="Once upon a time..."
                         className="min-h-[250px] resize-y"
@@ -139,7 +141,7 @@ export default function CreateStoryPage() {
                       />
                     </FormControl>
                     <FormDescription>
-                      Write your story here. Rich text editing capabilities (e.g., Tiptap) will be integrated later. For new lines, use '\n'.
+                      Write the first part of your story here. Rich text editing will be integrated later. For new lines, use '\n'.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -199,7 +201,7 @@ export default function CreateStoryPage() {
                                 <p className="text-xs text-muted-foreground">SVG, PNG, JPG or GIF (MAX. 800x400px)</p>
                             </div>
                             <Input id="dropzone-file" type="file" className="hidden" accept="image/*" 
-                              {...form.register('coverImage')} // Updated to use react-hook-form registration
+                              {...form.register('coverImage')}
                              />
                         </label>
                     </div> 

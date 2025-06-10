@@ -26,7 +26,7 @@ export default function UserProfilePage() {
   const [profileData, setProfileData] = useState<UserProfileType | null>(null);
   const [userStories, setUserStories] = useState<Story[]>([]);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
-  const [isFollowing, setIsFollowing] = useState(false); // Placeholder
+  const [isFollowing, setIsFollowing] = useState(false); 
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,50 +40,46 @@ export default function UserProfilePage() {
           const storiesQuery = firestoreQuery(
             storiesCollectionRef,
             where("authorId", "==", userId),
-            where("status", "==", "published"), // Only show published stories on profile
+            where("status", "==", "published"), 
             firestoreOrderBy("createdAt", "desc")
           );
           const storySnapshots = await getDocs(storiesQuery);
           const fetchedStories: Story[] = [];
-          storySnapshots.forEach((doc) => {
-            const data = doc.data();
+          storySnapshots.forEach((docSnap) => { // Renamed doc to docSnap to avoid conflict
+            const data = docSnap.data();
             fetchedStories.push({
-              id: doc.id,
+              id: docSnap.id,
               ...data,
               createdAt: Number(data.createdAt),
               updatedAt: Number(data.updatedAt),
-            } as Story);
+              // firstPartExcerpt: data.firstPartExcerpt, // if denormalized
+            } as Story); // Cast as Story, ensure all fields match
           });
           setUserStories(fetchedStories);
 
           // Profile Data Logic
           if (currentUser && currentUser.uid === userId) {
-            // Viewing own profile
             setProfileData(currentUser);
-          } else if (fetchedStories.length > 0) {
-            // Viewing someone else's profile, derive basic info from their stories
-            // This is a simplified approach. A 'users' collection would be better for full profiles.
-            setProfileData({
-              uid: userId,
-              displayName: fetchedStories[0].authorUsername, // Use username from their latest story
-              photoURL: fetchedStories[0].authorProfilePictureUrl,
-              // Other fields like bio, email, createdAt would ideally come from a 'users' collection
-              email: null, // Not available for other users without a users collection
-              createdAt: undefined, // Not easily available
-            });
           } else {
-             // No stories found for this user, or it's not the current user.
-             // Create a very basic profile to avoid errors, or show "user not found".
-             // For now, if no stories and not current user, it might lead to a "User not found" like state later.
-             // Let's try to get some basic info from auth if possible, even if not ideal
-             // This part is tricky without a dedicated users collection.
-             // For now, we'll assume if we can't find stories for a non-current user, they might not have much public info
-             setProfileData({uid: userId, displayName: `User ${userId.substring(0,6)}`, email: null});
-             // If you have a users collection, you'd fetch from there:
-             // const userDocRef = doc(db, "users", userId);
-             // const userDocSnap = await getDoc(userDocRef);
-             // if (userDocSnap.exists()) setProfileData({ uid: userId, ...userDocSnap.data() } as UserProfileType);
-             // else setError("User profile not found.");
+            // For other users, attempt to get basic info from one of their stories
+            // A dedicated 'users' collection is better for full profiles.
+             if (fetchedStories.length > 0) {
+                setProfileData({
+                    uid: userId,
+                    displayName: fetchedStories[0].authorUsername,
+                    photoURL: fetchedStories[0].authorProfilePictureUrl,
+                    email: null, 
+                    createdAt: undefined, 
+                });
+            } else {
+                // If no stories, create a minimal profile or indicate user might not exist publicly
+                // This would ideally fetch from a 'users' collection
+                // const userDocRef = doc(db, "users", userId); (Example)
+                // const userDocSnap = await getDoc(userDocRef);
+                // if (userDocSnap.exists()) setProfileData({ uid: userId, ...userDocSnap.data() } as UserProfileType);
+                // else setError("User profile not found.");
+                setProfileData({uid: userId, displayName: `User ${userId.substring(0,6)}`, email: null});
+            }
           }
 
         } catch (e) {
@@ -105,7 +101,6 @@ export default function UserProfilePage() {
       router.push("/login?redirect=/profile/" + userId);
       return;
     }
-    // Implement follow/unfollow logic here (e.g., update Firestore)
     setIsFollowing(!isFollowing); 
   };
 
@@ -117,7 +112,7 @@ export default function UserProfilePage() {
     return <div className="text-center py-10 text-destructive">{error}</div>;
   }
   
-  if (!profileData || !profileData.uid) { // Check for uid to ensure some profile data exists
+  if (!profileData || !profileData.uid) {
     return <div className="text-center py-10">User profile not found or user has no public activity.</div>;
   }
 
@@ -139,7 +134,6 @@ export default function UserProfilePage() {
               <h1 className="text-3xl md:text-4xl font-headline font-bold">{profileData.displayName || profileData.username || `User ${profileData.uid.substring(0,6)}`}</h1>
               {profileData.username && <p className="text-md text-muted-foreground">@{profileData.username}</p>}
                <div className="flex items-center justify-center md:justify-start space-x-4 mt-2 text-sm text-muted-foreground">
-                {/* Placeholder counts - These would need a proper backend implementation */}
                 <span><strong className="text-foreground">0</strong> Followers</span>
                 <span><strong className="text-foreground">0</strong> Following</span>
                 <span><strong className="text-foreground">{userStories.length}</strong> Stories</span>
@@ -151,7 +145,7 @@ export default function UserProfilePage() {
                   <Link href="/settings/profile"><Edit className="mr-2 h-4 w-4" /> Edit Profile</Link>
                 </Button>
               ) : currentUser ? (
-                <Button onClick={handleFollowToggle} variant={isFollowing ? "secondary" : "default"} disabled> {/* TODO: Implement follow logic */}
+                <Button onClick={handleFollowToggle} variant={isFollowing ? "secondary" : "default"} disabled>
                   {isFollowing ? "Unfollow" : "Follow"}
                 </Button>
               ) : (
@@ -203,8 +197,13 @@ export default function UserProfilePage() {
                        <Link href={`/stories/${story.id}`} className="hover:text-primary">{story.title}</Link>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="flex-grow text-sm text-muted-foreground line-clamp-2">
-                    {story.content.substring(0,100)}...
+                  <CardContent className="flex-grow text-sm text-muted-foreground">
+                     {/* Excerpt removed as content is now in parts. Consider denormalizing 'firstPartExcerpt' or fetching. */}
+                     {story.firstPartExcerpt ? (
+                        <p className="line-clamp-2">{story.firstPartExcerpt}</p>
+                     ) : (
+                        <p className="line-clamp-2 italic text-muted-foreground/70">No excerpt available.</p>
+                     )}
                   </CardContent>
                   <CardFooter className="text-xs text-muted-foreground flex justify-between items-center border-t pt-3 mt-2">
                      <div className="flex items-center gap-2">

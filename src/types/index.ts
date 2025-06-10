@@ -1,3 +1,4 @@
+
 import type { User as FirebaseUser } from 'firebase/auth';
 
 export interface UserProfile extends FirebaseUser {
@@ -15,16 +16,28 @@ export interface Story {
   authorUsername: string; 
   authorProfilePictureUrl?: string;
   title: string;
-  content: string; // Rich text (HTML or JSON from Tiptap)
+  // content: string; // Rich text (HTML or JSON from Tiptap) - MOVED TO StoryPart
   coverImageUrl?: string; // From Supabase
   tags: string[];
   category: string;
   status: 'draft' | 'published';
-  createdAt: number; // Store as timestamp
-  updatedAt: number; // Store as timestamp
+  createdAt: number; // Store as timestamp for the story entity itself
+  updatedAt: number; // Store as timestamp, updated when story metadata or any part changes
   views: number;
   likes: number;
   commentCount: number;
+  partCount?: number; // Optional: denormalized count of parts
+  firstPartExcerpt?: string; // Optional: denormalized excerpt from the first part
+}
+
+export interface StoryPart {
+  id: string; // Firestore document ID for this part
+  storyId: string; // ID of the parent Story document
+  authorId: string;
+  content: string; // Rich text (HTML or JSON from Tiptap) for this specific part
+  order: number;   // To maintain sequence of parts (e.g., 1, 2, 3...)
+  createdAt: number; // Timestamp for this part's creation
+  updatedAt: number; // Timestamp for this part's last update
 }
 
 export interface Comment {

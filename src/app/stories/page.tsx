@@ -3,7 +3,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs, orderBy, query as firestoreQuery } from "firebase/firestore";
+import { collection, getDocs, orderBy as firestoreOrderBy, query as firestoreQuery, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Story } from "@/types";
 
@@ -32,7 +32,11 @@ export default function StoriesPage() {
       try {
         const storiesCollectionRef = collection(db, "stories");
         // Query to get published stories, ordered by creation date
-        const q = firestoreQuery(storiesCollectionRef, orderBy("createdAt", "desc"));
+        const q = firestoreQuery(
+          storiesCollectionRef, 
+          where("status", "==", "published"), 
+          firestoreOrderBy("createdAt", "desc")
+        );
         const querySnapshot = await getDocs(q);
         const fetchedStories: Story[] = [];
         querySnapshot.forEach((doc) => {
@@ -43,19 +47,20 @@ export default function StoriesPage() {
             authorUsername: data.authorUsername,
             authorProfilePictureUrl: data.authorProfilePictureUrl,
             title: data.title,
-            content: data.content, // Keep content for excerpt generation if needed, or create an excerpt field
+            // content: data.content, // Content is now in parts subcollection
             coverImageUrl: data.coverImageUrl,
             tags: data.tags || [],
             category: data.category,
             status: data.status,
-            createdAt: Number(data.createdAt), // Ensure it's a number
-            updatedAt: Number(data.updatedAt), // Ensure it's a number
+            createdAt: Number(data.createdAt),
+            updatedAt: Number(data.updatedAt),
             views: data.views || 0,
             likes: data.likes || 0,
             commentCount: data.commentCount || 0,
-          });
+            firstPartExcerpt: data.firstPartExcerpt, // if denormalized
+          } as Story); // Cast as Story, ensure all fields match
         });
-        setStories(fetchedStories.filter(story => story.status === 'published')); // Only show published stories
+        setStories(fetchedStories);
       } catch (e) {
         console.error("Error fetching stories:", e);
         setError("Failed to load stories. Please try again later.");
@@ -133,7 +138,7 @@ export default function StoriesPage() {
                     width={600}
                     height={300}
                     className="w-full h-48 object-cover"
-                    data-ai-hint={`${story.category} ${story.tags && story.tags.length > 0 ? story.tags[0] : 'story'}`.substring(0, 20)} // Simple hint
+                    data-ai-hint={`${story.category} ${story.tags && story.tags.length > 0 ? story.tags[0] : 'story'}`.substring(0, 20)}
                   />
                 </Link>
                 <CardHeader>
@@ -152,10 +157,14 @@ export default function StoriesPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="flex-grow">
-                  {/* Simple excerpt from content. For production, consider a dedicated excerpt field or better truncation. */}
-                  <CardDescription className="line-clamp-3">{story.content.substring(0, 150)}...</CardDescription>
+                  {/* Excerpt removed as content is now in parts. Consider denormalizing 'firstPartExcerpt' to Story doc or fetching first part. */}
+                  {story.firstPartExcerpt ? (
+                     <CardDescription className="line-clamp-3">{story.firstPartExcerpt}</CardDescription>
+                  ) : (
+                     <CardDescription className="line-clamp-3 text-muted-foreground/70 italic">No excerpt available.</CardDescription>
+                  )}
                   <div className="mt-3 space-x-2">
-                    {story.tags?.slice(0,3).map(tag => ( // Show max 3 tags
+                    {story.tags?.slice(0,3).map(tag => (
                       <Link key={tag} href={`/tags/${tag.toLowerCase()}`} className="text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded-full hover:bg-primary hover:text-primary-foreground transition-colors">
                         {tag}
                       </Link>
@@ -185,8 +194,7 @@ export default function StoriesPage() {
         )}
       </section>
 
-      {/* Basic Pagination (Placeholder - requires more logic for actual pagination) */}
-      {stories.length > 0 && ( // Only show if there are stories
+      {stories.length > 0 && (
         <section className="flex justify-center mt-12">
           <Button variant="outline" className="mr-2" disabled>Previous</Button>
           <Button variant="outline" disabled>Next</Button>
