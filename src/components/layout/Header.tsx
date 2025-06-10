@@ -33,7 +33,7 @@ const Header = () => {
           <Button variant="ghost" asChild>
             <Link href="/stories/create">
               <PlusCircle className="mr-0 md:mr-2 h-4 w-4" /> {/* Hide text on small screens if needed */}
-              <span className="hidden md:inline">Create Story</span>
+              <span className="hidden md:inline">Create Story Thread</span>
             </Link>
           </Button>
           
