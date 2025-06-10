@@ -3,7 +3,7 @@
 "use client";
 
 import Link from 'next/link';
-import { useState } from 'react'; // Import useState
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -14,7 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'; // Added SheetHeader, SheetTitle
 import { Bell, LogOut, PlusCircle, User, Settings, LayoutDashboard, Menu } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import Logo from '@/components/Logo';
@@ -23,7 +23,7 @@ import ThemeSwitcher from '@/components/ThemeSwitcher';
 
 const Header = () => {
   const { currentUser, loading, signOut } = useAuth();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // Use useState directly
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
     <header className="bg-card border-b border-border shadow-sm sticky top-0 z-50">
@@ -121,9 +121,10 @@ const Header = () => {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-[280px] p-0 flex flex-col">
-                <div className="p-4 border-b">
+                <SheetHeader className="p-4 border-b">
+                  <SheetTitle className="sr-only">Main Navigation</SheetTitle>
                   <Logo />
-                </div>
+                </SheetHeader>
                 <nav className="flex-grow p-4 space-y-1">
                   <Button variant="ghost" className="w-full justify-start text-base py-3" asChild onClick={() => setIsMobileMenuOpen(false)}>
                     <Link href="/">Stories</Link>
