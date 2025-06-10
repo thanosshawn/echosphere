@@ -37,51 +37,46 @@ export async function addCommentToStoryNodeAction(
 
   const { storyId, nodeId, authorId, authorUsername, authorProfilePictureUrl, text } = validatedFields.data;
   const currentTime = Date.now();
+  const commentRef = doc(collection(db, "stories", storyId, "nodes", nodeId, "comments")); // ID is generated here
 
   try {
-    console.log("[addCommentToStoryNodeAction] Attempting to post comment. StoryID:", storyId, "NodeID:", nodeId, "AuthorID:", authorId);
-    const batch = writeBatch(db);
-    const commentRef = doc(collection(db, "stories", storyId, "nodes", nodeId, "comments"));
-    const nodeRef = doc(db, "stories", storyId, "nodes", nodeId);
-
-    const newComment: Omit<StoryNodeComment, 'id'> = {
-      storyId,
-      nodeId,
-      authorId,
-      authorUsername,
-      authorProfilePictureUrl: authorProfilePictureUrl ?? null,
-      text,
-      createdAt: currentTime,
-      parentId: null,
-      depth: 0,
-    };
-    batch.set(commentRef, newComment);
-    console.log("[addCommentToStoryNodeAction] Comment added to batch:", newComment);
-
-    // Debugging FieldValue.increment with Turbopack
-    console.log("[addCommentToStoryNodeAction] Checking FieldValue.increment. Type of FieldValue:", typeof FieldValue);
-    if (FieldValue && typeof FieldValue.increment === 'function') { // Check if FieldValue itself and its increment property are valid
-      console.log("[addCommentToStoryNodeAction] FieldValue.increment is a function. Proceeding with batch.update for commentCount.");
-      batch.update(nodeRef, { commentCount: FieldValue.increment(1) });
-    } else {
-      const errorMessageDetail = `FieldValue.increment is NOT a function. Type of FieldValue: ${typeof FieldValue}, Type of FieldValue.increment: ${typeof FieldValue?.increment}.`;
-      console.error("[addCommentToStoryNodeAction] CRITICAL ERROR:", errorMessageDetail);
-      console.error("[addCommentToStoryNodeAction] Full FieldValue object for inspection:", FieldValue);
-      // Try to inspect keys if FieldValue is an object
-      if (typeof FieldValue === 'object' && FieldValue !== null) {
-        try {
-          console.error("[addCommentToStoryNodeAction] Keys of FieldValue:", Object.keys(FieldValue));
-        } catch (e) {
-          console.error("[addCommentToStoryNodeAction] Could not get keys of FieldValue:", e);
-        }
-      }
-      throw new Error("Firestore FieldValue.increment is not available or not a function.");
-    }
-    console.log("[addCommentToStoryNodeAction] Node commentCount increment added to batch for node:", nodeRef.path);
+    console.log("[addCommentToStoryNodeAction] Attempting to post comment via transaction. StoryID:", storyId, "NodeID:", nodeId, "AuthorID:", authorId);
     
+    await runTransaction(db, async (transaction) => {
+      const nodeRef = doc(db, "stories", storyId, "nodes", nodeId);
+      const nodeDoc = await transaction.get(nodeRef);
 
-    await batch.commit();
-    console.log("[addCommentToStoryNodeAction] Batch commit successful. Comment ID:", commentRef.id);
+      if (!nodeDoc.exists()) {
+        console.error(`[addCommentToStoryNodeAction] Node not found during transaction: ${nodeRef.path}`);
+        throw new Error("Story node not found, cannot update comment count.");
+      }
+
+      const nodeData = nodeDoc.data() as StoryNode;
+      const currentCommentCount = nodeData.commentCount || 0;
+      const newCommentCount = currentCommentCount + 1;
+
+      const newComment: Omit<StoryNodeComment, 'id'> = {
+        storyId,
+        nodeId,
+        authorId,
+        authorUsername,
+        authorProfilePictureUrl: authorProfilePictureUrl ?? null,
+        text,
+        createdAt: currentTime,
+        parentId: null,
+        depth: 0,
+      };
+      transaction.set(commentRef, newComment);
+      console.log("[addCommentToStoryNodeAction] Comment added to transaction:", newComment);
+
+      transaction.update(nodeRef, { 
+        commentCount: newCommentCount,
+        updatedAt: currentTime // Also update the node's updatedAt timestamp
+      });
+      console.log(`[addCommentToStoryNodeAction] Node commentCount updated to ${newCommentCount} in transaction for node: ${nodeRef.path}`);
+    });
+
+    console.log("[addCommentToStoryNodeAction] Transaction successful. Comment ID:", commentRef.id);
 
     revalidatePath(`/stories/${storyId}`); 
     console.log("[addCommentToStoryNodeAction] Path revalidated:", `/stories/${storyId}`);
@@ -192,21 +187,6 @@ async function handleVote(
           currentVotedBy[userId] = 'downvote';
           console.log(`[handleVote] User ${userId} downvoted.`);
         }
-      }
-
-      // Debugging FieldValue.increment for votes
-      console.log("[handleVote] Checking FieldValue.increment. Type of FieldValue:", typeof FieldValue);
-      if (FieldValue && typeof FieldValue.increment === 'function') {
-        console.log("[handleVote] FieldValue.increment is a function. Updating votes.");
-        // Note: FieldValue.increment should not be used here directly for setting vote counts
-        // as the logic above already calculates the new absolute values (newUpvotes, newDownvotes).
-        // FieldValue.increment is for atomic server-side increments, not for setting calculated values.
-        // The current logic of calculating newUpvotes/newDownvotes and then setting them is correct for this scenario.
-      } else {
-          const errorMessageDetail = `FieldValue.increment is NOT a function in handleVote. Type of FieldValue: ${typeof FieldValue}, Type of FieldValue.increment: ${typeof FieldValue?.increment}.`;
-          console.error("[handleVote] CRITICAL ERROR:", errorMessageDetail);
-          // This part might not be directly causing an issue if FieldValue.increment is not used for votes,
-          // but it's good to log if it's unexpectedly not a function.
       }
 
       transaction.update(nodeRef, {
