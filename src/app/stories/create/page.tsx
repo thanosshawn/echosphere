@@ -16,38 +16,36 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-// Textarea removed
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, UploadCloud } from "lucide-react";
-import { createStoryAction } from "./actions"; // Ensure this path is correct
-import type { CreateStoryFormValues } from "./actions"; // Import type from actions
+import { Loader2, UploadCloud, FileText } from "lucide-react";
+import { createStoryAction } from "./actions"; 
+import type { CreateStoryFormValues } from "./actions"; 
 import RichTextEditor from "@/components/editor/RichTextEditor";
 
-
-// This schema is for client-side form validation
 const storyFormSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters").max(150, "Title must be less than 150 characters"),
-  initialNodeContent: z.string().min(10, "Initial story content must be at least 10 characters (HTML allowed)."), // Updated name and min length
+  initialNodeContent: z.string().min(10, "Initial story content must be at least 10 characters (HTML allowed).").refine(value => value !== '<p></p>', { message: "Initial story content cannot be empty." }),
   category: z.string().min(1, "Please select a category"),
-  tags: z.string().optional(), // Comma-separated tags
+  tags: z.string().optional(), 
   status: z.enum(["draft", "published"]),
-  coverImage: z.instanceof(File).optional().nullable(),
+  coverImage: z.instanceof(File).optional().nullable()
+    .refine(file => !file || file.size <= 5 * 1024 * 1024, `Max file size is 5MB.`)
+    .refine(file => !file || ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type), 'Only .jpg, .png, .gif, .webp formats are supported.'),
 });
 
-// Client-side form values type
 type ClientStoryFormValues = z.infer<typeof storyFormSchema>;
-
 
 export default function CreateStoryPage() {
   const { currentUser, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !currentUser) {
@@ -59,7 +57,7 @@ export default function CreateStoryPage() {
     resolver: zodResolver(storyFormSchema),
     defaultValues: {
       title: "",
-      initialNodeContent: "<p></p>", // Start with an empty paragraph for Tiptap
+      initialNodeContent: "<p></p>", 
       category: "",
       tags: "",
       status: "draft",
@@ -95,11 +93,11 @@ export default function CreateStoryPage() {
     } else if (result.success && result.storyId) {
       toast({ title: "Story Submitted!", description: result.success });
       form.reset(); 
+      setSelectedFileName(null);
       router.push(`/stories/${result.storyId}`); 
     } else {
       toast({ title: "Unexpected Error", description: "Something went wrong. Please try again.", variant: "destructive" });
     }
-
     setIsSubmitting(false);
   }
 
@@ -108,24 +106,27 @@ export default function CreateStoryPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-4xl font-headline mb-8 text-center">Create Your Story Thread</h1>
-      <Card className="shadow-xl">
-        <CardHeader>
-          <CardTitle className="font-headline">New Masterpiece</CardTitle>
-          <CardDescription>Fill in the details below to share your narrative with the EchoSphere community.</CardDescription>
+    <div className="max-w-3xl mx-auto py-4 sm:py-8">
+      <div className="text-center mb-6 sm:mb-8">
+        <FileText className="h-12 w-12 text-primary mx-auto mb-2" />
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-headline">Create Your Story Thread</h1>
+      </div>
+      <Card className="shadow-xl rounded-lg">
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="font-headline text-xl sm:text-2xl">New Masterpiece</CardTitle>
+          <CardDescription className="text-sm">Fill in the details below to share your narrative.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <FormField
                 control={form.control}
                 name="title"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-lg">Story Title</FormLabel>
+                    <FormLabel className="text-base">Story Title</FormLabel>
                     <FormControl>
-                      <Input placeholder="A catchy title for your story" {...field} />
+                      <Input placeholder="A catchy title for your story" {...field} className="text-sm"/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -134,17 +135,17 @@ export default function CreateStoryPage() {
 
               <FormField
                 control={form.control}
-                name="initialNodeContent" // Updated name
+                name="initialNodeContent"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-lg">Your Narrative (First Node)</FormLabel>
+                    <FormLabel className="text-base">Your Narrative (First Node)</FormLabel>
                     <FormControl>
                        <RichTextEditor
                         initialContent={field.value}
                         onChange={field.onChange}
                       />
                     </FormControl>
-                    <FormDescription>
+                    <FormDescription className="text-xs">
                       Write the first node of your story here. Use the toolbar for formatting.
                     </FormDescription>
                     <FormMessage />
@@ -152,16 +153,16 @@ export default function CreateStoryPage() {
                 )}
               />
 
-              <div className="grid md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <FormField
                   control={form.control}
                   name="category"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-lg">Category</FormLabel>
+                      <FormLabel className="text-base">Category</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="text-sm">
                             <SelectValue placeholder="Select a category" />
                           </SelectTrigger>
                         </FormControl>
@@ -183,11 +184,11 @@ export default function CreateStoryPage() {
                   name="tags"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-lg">Tags</FormLabel>
+                      <FormLabel className="text-base">Tags</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., adventure, sci-fi, personal growth" {...field} />
+                        <Input placeholder="e.g., adventure, sci-fi" {...field} className="text-sm"/>
                       </FormControl>
-                      <FormDescription>Comma-separated tags.</FormDescription>
+                      <FormDescription className="text-xs">Comma-separated tags.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -199,45 +200,46 @@ export default function CreateStoryPage() {
                 name="coverImage"
                 render={({ field: { onChange, value, ...rest } }) => (
                 <FormItem>
-                    <FormLabel className="text-lg">Cover Image (Optional)</FormLabel>
+                    <FormLabel className="text-base">Cover Image (Optional)</FormLabel>
                     <FormControl>
                         <div className="flex items-center justify-center w-full">
-                            <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-muted transition-colors">
-                                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                    <UploadCloud className="w-10 h-10 mb-3 text-muted-foreground" />
-                                    <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-                                    <p className="text-xs text-muted-foreground">PNG, JPG, GIF (MAX. 5MB)</p>
+                            <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-32 sm:h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-muted transition-colors">
+                                <div className="flex flex-col items-center justify-center pt-4 pb-5 sm:pt-5 sm:pb-6">
+                                    <UploadCloud className="w-8 h-8 sm:w-10 sm:w-10 mb-2 sm:mb-3 text-muted-foreground" />
+                                    <p className="mb-1 text-xs sm:text-sm text-muted-foreground"><span className="font-semibold">Click to upload</span> or drag & drop</p>
+                                    <p className="text-2xs sm:text-xs text-muted-foreground">PNG, JPG, GIF, WEBP (MAX. 5MB)</p>
                                 </div>
                                 <Input 
                                     id="dropzone-file" 
                                     type="file" 
                                     className="hidden" 
-                                    accept="image/*"
-                                    onChange={(e) => onChange(e.target.files ? e.target.files[0] : null)}
+                                    accept="image/png, image/jpeg, image/gif, image/webp"
+                                    onChange={(e) => {
+                                        const file = e.target.files ? e.target.files[0] : null;
+                                        onChange(file);
+                                        setSelectedFileName(file ? file.name : null);
+                                    }}
                                     {...rest}
                                 />
                             </label>
                         </div> 
                     </FormControl>
-                    <FormDescription>
-                    Upload an image that represents your story.
-                    </FormDescription>
-                    {form.formState.errors.coverImage && <FormMessage>{form.formState.errors.coverImage.message?.toString()}</FormMessage>}
-                     {value && <p className="text-sm text-muted-foreground mt-2">Selected file: {value.name}</p>}
+                    {selectedFileName && <FormDescription className="text-xs mt-1">Selected: {selectedFileName}</FormDescription>}
+                    {!selectedFileName && <FormDescription className="text-xs mt-1">Upload an image to represent your story.</FormDescription>}
+                    <FormMessage />
                 </FormItem>
                 )}
               />
-
 
               <FormField
                 control={form.control}
                 name="status"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-lg">Publication Status</FormLabel>
+                    <FormLabel className="text-base">Publication Status</FormLabel>
                      <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger className="w-[180px]">
+                          <SelectTrigger className="w-full sm:w-[200px] text-sm">
                             <SelectValue placeholder="Select status" />
                           </SelectTrigger>
                         </FormControl>
@@ -246,17 +248,17 @@ export default function CreateStoryPage() {
                           <SelectItem value="published">Publish</SelectItem>
                         </SelectContent>
                       </Select>
-                    <FormDescription>Save as draft to work on it later, or publish it for everyone to see.</FormDescription>
+                    <FormDescription className="text-xs">Save as draft or publish for everyone.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <div className="flex justify-end gap-4 pt-4">
-                <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
+              <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4">
+                <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting} className="w-full sm:w-auto">
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isSubmitting || !form.formState.isValid}>
+                <Button type="submit" disabled={isSubmitting || !form.formState.isValid} className="w-full sm:w-auto">
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {form.getValues("status") === "published" ? "Publish Story" : "Save Draft"}
                 </Button>

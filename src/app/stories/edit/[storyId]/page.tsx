@@ -19,21 +19,21 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import {
   Form,
   FormControl,
-  FormDescription, // Added FormDescription
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-// Textarea removed
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, ArrowLeft, PlusCircle } from "lucide-react";
+import { Loader2, ArrowLeft, PlusCircle, Edit2, Maximize } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import RichTextEditor from "@/components/editor/RichTextEditor";
+import Link from "next/link";
 
 const addNodeFormSchema = z.object({
-  newNodeContent: z.string().min(10, "Node content must be at least 10 characters (HTML allowed)."),
+  newNodeContent: z.string().min(10, "Node content must be at least 10 characters (HTML allowed).").refine(value => value !== '<p></p>', { message: "Node content cannot be empty." }),
   parentNodeId: z.string().min(1, "You must select a parent node to branch from."),
 });
 type AddNodeFormValues = z.infer<typeof addNodeFormSchema>;
@@ -54,7 +54,7 @@ export default function EditStoryPage() {
   const form = useForm<AddNodeFormValues>({
     resolver: zodResolver(addNodeFormSchema),
     defaultValues: {
-      newNodeContent: "<p></p>", // Start with an empty paragraph for Tiptap
+      newNodeContent: "<p></p>",
       parentNodeId: "",
     },
   });
@@ -73,6 +73,8 @@ export default function EditStoryPage() {
           setError("You are not authorized to edit this story.");
           setStory(null);
           setIsLoadingPage(false);
+          toast({ title: "Access Denied", description: "You cannot edit this story.", variant: "destructive" });
+          router.push(`/stories/${storyId}`);
           return;
         }
         setStory({ 
@@ -92,7 +94,6 @@ export default function EditStoryPage() {
             id: nodeDoc.id,
             ...nodeData,
              order: Number(nodeData.order),
-             // Ensure all fields from StoryNode type are mapped
              upvotes: nodeData.upvotes || 0,
              downvotes: nodeData.downvotes || 0,
              votedBy: nodeData.votedBy || {},
@@ -101,20 +102,29 @@ export default function EditStoryPage() {
         });
         setStoryNodes(fetchedNodes);
         if (fetchedNodes.length > 0 && !form.getValues('parentNodeId')) {
-          // Default parentNodeId to the last node if not already set
-          form.setValue('parentNodeId', fetchedNodes[fetchedNodes.length - 1].id);
+          const urlParams = new URLSearchParams(window.location.search);
+          const targetNodeId = urlParams.get('nodeId');
+          form.setValue('parentNodeId', targetNodeId || fetchedNodes[fetchedNodes.length - 1].id);
+        } else if (fetchedNodes.length === 0 && story?.firstNodeExcerpt) {
+           // This case implies we should be adding to the implicit first node,
+           // but current logic requires an explicit parentNodeId from existing fetched nodes.
+           // This might need a special ID for "root" or the first node if it's not fetched as a normal node.
+           // For now, if no nodes, selecting a parent is impossible.
         }
 
       } else {
         setError("Story not found.");
+        toast({ title: "Error", description: "Story not found.", variant: "destructive" });
         setStory(null);
+        router.push('/stories');
       }
     } catch (e) {
       console.error("Error fetching story and nodes:", e);
       setError("Failed to load story data.");
+      toast({ title: "Error", description: "Failed to load story data.", variant: "destructive" });
     }
     setIsLoadingPage(false);
-  }, [storyId, currentUser, db, form]);
+  }, [storyId, currentUser, db, form, toast, router]);
 
 
   useEffect(() => {
@@ -148,10 +158,10 @@ export default function EditStoryPage() {
 
     if (result.error) {
       toast({ title: "Error Adding Node", description: result.error, variant: "destructive" });
-    } else if (result.success) {
+    } else if (result.success && result.newNodeId) {
       toast({ title: "Node Added!", description: result.success });
-      form.reset({ newNodeContent: "<p></p>", parentNodeId: values.parentNodeId }); // Reset content, keep parent
-      fetchStoryAndNodes(); // Re-fetch to update the list and story data
+      form.reset({ newNodeContent: "<p></p>", parentNodeId: result.newNodeId }); 
+      fetchStoryAndNodes(); 
     }
     setIsSubmitting(false);
   }
@@ -165,78 +175,90 @@ export default function EditStoryPage() {
   }
 
   if (!story) {
-    return <div className="text-center py-10">Story not found or not authorized. <Button variant="link" onClick={() => router.push('/stories')}>Browse Stories</Button></div>;
+    return <div className="text-center py-10">Story data is not available. <Button variant="link" onClick={() => router.push('/stories')}>Browse Stories</Button></div>;
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
-      <Button variant="outline" onClick={() => router.push(`/stories/${story.id}`)} className="mb-2">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Story
-      </Button>
-      <h1 className="text-4xl font-headline">Edit Story: {story.title}</h1>
+    <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8 py-4 sm:py-6">
+      <div className="flex items-center justify-between">
+        <Button variant="outline" onClick={() => router.push(`/stories/${story.id}`)} size="sm">
+          <ArrowLeft className="mr-1.5 h-4 w-4" /> View Story
+        </Button>
+         <Button variant="outline" onClick={() => router.push(`/stories/edit/${story.id}`)} size="sm" className="flex items-center gap-1.5"> {/* Placeholder for story settings */}
+            <Edit2 className="h-4 w-4"/> Edit Story Details
+        </Button>
+      </div>
+
+      <div className="text-center sm:text-left">
+        <h1 className="text-2xl sm:text-3xl font-headline">Edit Story:</h1>
+        <p className="text-lg sm:text-xl text-primary font-semibold">{story.title}</p>
+      </div>
       
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline">Existing Story Nodes</CardTitle>
-          <CardDescription>Review the current nodes of your story. New nodes will branch from a selected parent.</CardDescription>
+      <Card className="rounded-lg">
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="font-headline text-xl sm:text-2xl">Existing Story Nodes</CardTitle>
+          <CardDescription className="text-sm">Review current nodes. New nodes branch from a selected parent.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4 p-4 sm:p-6 max-h-[300px] overflow-y-auto">
           {storyNodes.length > 0 ? (
             storyNodes.map((node, index) => (
-              <div key={node.id} className="p-4 border rounded-md bg-muted/30">
-                <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-lg font-semibold text-primary">
-                        Node {index + 1} (ID: ...{node.id.slice(-6)})
-                        {node.parentId && <span className="text-xs text-muted-foreground ml-2">(Parent: ...{node.parentId.slice(-6)})</span>}
+              <div key={node.id} className="p-3 border rounded-md bg-muted/30 relative group">
+                <div className="flex justify-between items-start mb-1">
+                    <h3 className="text-sm sm:text-base font-semibold text-primary/90 pr-8">
+                        Node {index + 1} 
+                        {node.parentId && <span className="text-2xs sm:text-xs text-muted-foreground ml-1.5">(Parent: ...{node.parentId.slice(-4)})</span>}
                     </h3>
-                    {/* Placeholder for Edit Node button */}
+                    {/* Quick Edit Node Button - Placeholder */}
+                    {/* <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6 opacity-50 group-hover:opacity-100 transition-opacity">
+                        <Edit2 className="h-3.5 w-3.5"/>
+                    </Button> */}
                 </div>
                 <div 
-                    className="prose prose-sm dark:prose-invert max-w-none"
+                    className="prose prose-xs sm:prose-sm dark:prose-invert max-w-none line-clamp-3"
                     dangerouslySetInnerHTML={{ __html: node.content }} 
                 />
-                <p className="text-xs text-muted-foreground mt-2">
-                  Created: {new Date(node.createdAt).toLocaleString()}
+                <p className="text-2xs sm:text-xs text-muted-foreground mt-1.5">
+                  By: {node.authorUsername} &bull; {new Date(node.createdAt).toLocaleDateString()}
                 </p>
               </div>
             ))
           ) : (
-            <p>No nodes have been added to this story yet, besides the initial one (which is not shown here for editing).</p>
+            <p className="text-sm text-muted-foreground text-center py-4">No nodes yet (besides the initial one, if created).</p>
           )}
         </CardContent>
       </Card>
 
       <Separator />
 
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="font-headline">Add New Story Node</CardTitle>
-          <CardDescription>Continue your story by adding a new node, branching from an existing one.</CardDescription>
+      <Card className="shadow-lg rounded-lg">
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="font-headline text-xl sm:text-2xl">Add New Story Node</CardTitle>
+          <CardDescription className="text-sm">Continue your story by adding a new node.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onAddNodeSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onAddNodeSubmit)} className="space-y-5">
               <FormField
                 control={form.control}
                 name="parentNodeId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-lg">Branch from Node</FormLabel>
+                    <FormLabel className="text-base">Branch from Node</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="text-sm w-full">
                           <SelectValue placeholder="Select parent node" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {storyNodes.map((node, index) => (
-                          <SelectItem key={node.id} value={node.id}>
-                            Node {index + 1}: "{node.content.replace(/<[^>]+>/g, '').substring(0, 30)}..." (ID: ...{node.id.slice(-6)})
+                        {storyNodes.length > 0 ? storyNodes.map((node, index) => (
+                          <SelectItem key={node.id} value={node.id} className="text-sm">
+                            Node {index + 1}: "{node.content.replace(/<[^>]+>/g, '').substring(0, 30)}..."
                           </SelectItem>
-                        ))}
+                        )) : <SelectItem value="" disabled>No existing nodes to select</SelectItem>}
                       </SelectContent>
                     </Select>
-                    <FormDescription>Choose an existing node to add your new contribution after.</FormDescription>
+                    <FormDescription className="text-xs">Choose an existing node to add your contribution after.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -247,24 +269,29 @@ export default function EditStoryPage() {
                 name="newNodeContent"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-lg">Content for New Node</FormLabel>
+                    <FormLabel className="text-base">Content for New Node</FormLabel>
                     <FormControl>
                       <RichTextEditor
                         initialContent={field.value}
                         onChange={field.onChange}
                       />
                     </FormControl>
-                     <FormDescription>Write your contribution here. Use the toolbar for formatting.</FormDescription>
+                     <FormDescription className="text-xs">Write your contribution here. Use the toolbar for formatting.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <div className="flex justify-end">
-                <Button type="submit" disabled={isSubmitting || !form.formState.isValid}>
+              <div className="flex flex-col sm:flex-row justify-end pt-3">
+                <Button type="submit" disabled={isSubmitting || !form.formState.isValid || storyNodes.length === 0} className="w-full sm:w-auto">
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   <PlusCircle className="mr-2 h-4 w-4" /> Add Node
                 </Button>
               </div>
+               {storyNodes.length === 0 && (
+                <p className="text-xs text-destructive text-center mt-2">
+                  Cannot add a node yet. The story must have at least one initial node created (which happens upon story creation). If this story had an initial node, it might not be listed here for selection as a parent.
+                </p>
+              )}
             </form>
           </Form>
         </CardContent>

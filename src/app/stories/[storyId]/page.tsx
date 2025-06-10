@@ -16,8 +16,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, Edit, Eye, Heart, Loader2, MessageSquare, Send, User, Tag, ThumbsUp, ThumbsDown, CornerDownRight } from "lucide-react";
-import { addCommentToStoryNodeAction, upvoteStoryNodeAction, downvoteStoryNodeAction } from "./actions.ts";
+import { ArrowLeft, CalendarDays, Edit, Eye, Heart, Loader2, MessageSquare, Send, User, Tag, ThumbsUp, ThumbsDown, CornerDownRight, PlusCircle } from "lucide-react";
+import { addCommentToStoryNodeAction, upvoteStoryNodeAction, downvoteStoryNodeAction } from "./actions";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import RichTextEditor from "@/components/editor/RichTextEditor";
@@ -41,6 +41,7 @@ interface StoryNodeDisplayProps {
   currentUser: UserProfile | null;
   onVote: (nodeId: string, voteType: 'upvote' | 'downvote') => Promise<void>;
   refreshAllNodes: () => void; 
+  isStoryAuthor: boolean;
 }
 
 const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({ 
@@ -51,7 +52,8 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
   level = 0, 
   currentUser,
   onVote,
-  refreshAllNodes 
+  refreshAllNodes,
+  isStoryAuthor
 }) => {
   const children = allNodes.filter(childNode => childNode.parentId === node.id).sort((a, b) => a.order - b.order);
   
@@ -59,6 +61,7 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
   const [nodeComments, setNodeComments] = useState<StoryNodeComment[]>([]);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   const commentForm = useForm<CommentFormValues>({
     resolver: zodResolver(commentFormSchema),
@@ -123,19 +126,25 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
   };
   
   const userVote = currentUser && node.votedBy ? node.votedBy[currentUser.uid] : null;
+  const nodeIndentation = level * 16; // Reduced indentation for mobile
 
   return (
-    <div style={{ marginLeft: `${level * 25}px` }} className={`mt-4 p-4 border rounded-lg shadow-sm ${level > 0 ? 'bg-muted/30' : 'bg-card'}`}>
-      {level > 0 && <CornerDownRight className="inline-block h-4 w-4 mr-2 text-muted-foreground" />}
+    <div style={{ marginLeft: `${nodeIndentation}px` }} className={cn("mt-4 rounded-lg shadow-sm", level > 0 ? 'bg-muted/20 p-3 sm:p-4' : 'bg-card p-4 sm:p-5')}>
+      {level > 0 && <CornerDownRight className="inline-block h-4 w-4 mr-1.5 text-muted-foreground mb-0.5" />}
       <div className="flex justify-between items-start mb-2">
         <div className="flex items-center space-x-2 text-xs text-muted-foreground">
             <Avatar className="h-6 w-6">
                 <AvatarImage src={node.authorProfilePictureUrl || undefined} alt={node.authorUsername} />
-                <AvatarFallback>{node.authorUsername?.[0]?.toUpperCase() || 'A'}</AvatarFallback>
+                <AvatarFallback className="text-xs">{node.authorUsername?.[0]?.toUpperCase() || 'A'}</AvatarFallback>
             </Avatar>
             <Link href={`/profile/${node.authorId}`} className="font-medium hover:underline text-foreground">{node.authorUsername}</Link>
             <span>&bull;</span>
             <span>{new Date(node.createdAt).toLocaleDateString()}</span>
+             {isStoryAuthor && (
+              <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={() => router.push(`/stories/edit/${storyId}?nodeId=${node.id}`)} title="Add child node">
+                <PlusCircle className="h-4 w-4 text-primary" />
+              </Button>
+            )}
         </div>
       </div>
       
@@ -144,41 +153,41 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
         dangerouslySetInnerHTML={{ __html: node.content }}
       />
 
-      <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-3 pt-3 border-t">
+      <div className="flex items-center space-x-1 sm:space-x-2 text-xs text-muted-foreground mt-3 pt-3 border-t">
         <Button variant="ghost" size="sm" onClick={() => handleLocalVote('upvote')} disabled={!currentUser} 
-                className={cn(userVote === 'upvote' && 'text-primary bg-primary/10 hover:bg-primary/20')}>
-          <ThumbsUp className="mr-1.5 h-4 w-4" /> {node.upvotes || 0}
+                className={cn("px-2 py-1", userVote === 'upvote' && 'text-primary bg-primary/10 hover:bg-primary/20')}>
+          <ThumbsUp className="mr-1 h-3.5 w-3.5 sm:mr-1.5 sm:h-4 sm:w-4" /> {node.upvotes || 0}
         </Button>
         <Button variant="ghost" size="sm" onClick={() => handleLocalVote('downvote')} disabled={!currentUser}
-                className={cn(userVote === 'downvote' && 'text-destructive bg-destructive/10 hover:bg-destructive/20')}>
-          <ThumbsDown className="mr-1.5 h-4 w-4" /> {node.downvotes || 0}
+                className={cn("px-2 py-1", userVote === 'downvote' && 'text-destructive bg-destructive/10 hover:bg-destructive/20')}>
+          <ThumbsDown className="mr-1 h-3.5 w-3.5 sm:mr-1.5 sm:h-4 sm:w-4" /> {node.downvotes || 0}
         </Button>
-        <span className="flex items-center"><MessageSquare className="mr-1.5 h-4 w-4" /> {node.commentCount || 0}</span>
+        <span className="flex items-center pl-1 sm:pl-2"><MessageSquare className="mr-1 h-3.5 w-3.5 sm:mr-1.5 sm:h-4 sm:w-4" /> {node.commentCount || 0}</span>
       </div>
 
-      <div className="mt-4 pl-4 border-l-2 border-border/50">
-        <h4 className="text-sm font-semibold mb-2 text-foreground/80">Comments:</h4>
+      <div className="mt-4 pl-2 sm:pl-4 border-l-2 border-border/30">
+        <h4 className="text-xs sm:text-sm font-semibold mb-2 text-foreground/80">Comments:</h4>
         {isLoadingComments ? (
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground py-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
+          <div className="flex items-center space-x-2 text-xs text-muted-foreground py-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
             <span>Loading comments...</span>
           </div>
         ) : nodeComments.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {nodeComments.map(comment => (
-              <div key={comment.id} className="text-xs p-2.5 bg-muted/50 rounded-md shadow-sm">
+              <div key={comment.id} className="text-xs p-2 bg-muted/40 rounded-md shadow-xs">
                  <div className="flex items-center mb-1">
-                    <Avatar className="h-5 w-5 mr-2">
+                    <Avatar className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2">
                         <AvatarImage src={comment.authorProfilePictureUrl || undefined} alt={comment.authorUsername} />
-                        <AvatarFallback>{comment.authorUsername?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
+                        <AvatarFallback className="text-2xs sm:text-xs">{comment.authorUsername?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
                     </Avatar>
-                    <Link href={`/profile/${comment.authorId}`} className="font-semibold text-foreground hover:underline">{comment.authorUsername || "Anonymous"}</Link>
-                    <span className="ml-2 text-muted-foreground text-xs">
+                    <Link href={`/profile/${comment.authorId}`} className="font-semibold text-foreground hover:underline text-xs sm:text-sm">{comment.authorUsername || "Anonymous"}</Link>
+                    <span className="ml-1.5 sm:ml-2 text-muted-foreground text-2xs sm:text-xs">
                         &bull; {new Date(comment.createdAt).toLocaleString()}
                     </span>
                 </div>
                 <div 
-                  className="prose prose-xs dark:prose-invert max-w-none pl-7 text-foreground/90"
+                  className="prose prose-xs dark:prose-invert max-w-none pl-6 sm:pl-7 text-foreground/90"
                   dangerouslySetInnerHTML={{ __html: comment.text }}
                 />
               </div>
@@ -190,7 +199,7 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
 
         {currentUser && (
           <Form {...commentForm}>
-            <form onSubmit={commentForm.handleSubmit(handlePostComment)} className="mt-4 space-y-2">
+            <form onSubmit={commentForm.handleSubmit(handlePostComment)} className="mt-3 space-y-1.5">
               <FormField
                 control={commentForm.control}
                 name="commentText"
@@ -203,12 +212,12 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
                         onChange={field.onChange}
                       />
                     </FormControl>
-                    <FormMessage />
+                    <FormMessage className="text-xs" />
                   </FormItem>
                 )}
               />
-              <Button type="submit" size="sm" disabled={isSubmittingComment || !commentForm.formState.isValid}>
-                {isSubmittingComment && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+              <Button type="submit" size="sm" className="text-xs px-2.5 py-1" disabled={isSubmittingComment || !commentForm.formState.isValid}>
+                {isSubmittingComment && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
                 Post Comment
               </Button>
             </form>
@@ -232,6 +241,7 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
             currentUser={currentUser}
             onVote={onVote}
             refreshAllNodes={refreshAllNodes}
+            isStoryAuthor={isStoryAuthor}
         />
       ))}
     </div>
@@ -323,32 +333,15 @@ export default function StoryDetailPage() {
     }
   };
   
-  const renderNodesRecursive = (nodesToRender: StoryNode[], allNodes: StoryNode[], parentId: string | null, level: number = 0): JSX.Element[] => {
-    return nodesToRender
-      .filter(node => node.parentId === parentId)
-      .sort((a,b) => a.order - b.order) 
-      .map(node => (
-        <Fragment key={node.id}>
-          <StoryNodeDisplay
-            node={node}
-            allNodes={allNodes}
-            storyId={story!.id} 
-            storyAuthorId={story!.authorId}
-            level={level}
-            currentUser={currentUser}
-            onVote={handleVoteOnNode}
-            refreshAllNodes={fetchStoryAndNodes}
-          />
-        </Fragment>
-      ));
-  };
+  const isAuthor = currentUser?.uid === story?.authorId;
+  const rootNodesToRender = storyNodes.filter(node => node.parentId === null);
 
 
   if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-10rem)]">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-4 text-lg">Loading story...</p>
+        <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 animate-spin text-primary" />
+        <p className="ml-3 sm:ml-4 text-md sm:text-lg">Loading story...</p>
       </div>
     );
   }
@@ -356,7 +349,7 @@ export default function StoryDetailPage() {
   if (error) {
     return (
       <div className="text-center py-10">
-        <h2 className="text-2xl font-semibold mb-4 text-destructive">{error}</h2>
+        <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-destructive">{error}</h2>
         <Button onClick={() => router.back()}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Go Back
         </Button>
@@ -367,26 +360,22 @@ export default function StoryDetailPage() {
   if (!story) {
     return (
        <div className="text-center py-10">
-        <h2 className="text-2xl font-semibold mb-4">Story not found.</h2>
+        <h2 className="text-xl sm:text-2xl font-semibold mb-4">Story not found.</h2>
         <Button onClick={() => router.back()}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Go Back
         </Button>
       </div>
     );
   }
-  
-  const isAuthor = currentUser?.uid === story.authorId;
-  const rootNodesToRender = storyNodes.filter(node => node.parentId === null);
-
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div className="flex justify-between items-center mb-6">
-        <Button variant="outline" onClick={() => router.push('/stories')}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Stories
+    <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
+        <Button variant="outline" onClick={() => router.push('/stories')} size="sm">
+          <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to Stories
         </Button>
         {isAuthor && (
-          <Button variant="outline" asChild>
+          <Button variant="outline" asChild size="sm">
             <Link href={`/stories/edit/${story.id}`}> 
               <Edit className="mr-1.5 h-4 w-4" /> Edit Story
             </Link>
@@ -394,60 +383,73 @@ export default function StoryDetailPage() {
         )}
       </div>
       
-
       <article>
         {story.coverImageUrl && (
-          <div className="mb-8 rounded-lg overflow-hidden shadow-lg">
+          <div className="mb-6 sm:mb-8 rounded-lg overflow-hidden shadow-lg aspect-[16/9] sm:aspect-[2/1] bg-muted">
             <Image
               src={story.coverImageUrl}
               alt={`Cover image for ${story.title}`}
               width={800}
               height={400}
-              className="w-full h-auto object-cover max-h-[400px]"
+              className="w-full h-full object-cover"
               data-ai-hint="story cover large"
               priority 
             />
           </div>
         )}
         {!story.coverImageUrl && story.title && (
-           <div className="mb-8 rounded-lg overflow-hidden shadow-lg bg-muted flex items-center justify-center h-[300px] md:h-[400px]">
+           <div className="mb-6 sm:mb-8 rounded-lg overflow-hidden shadow-lg bg-muted flex items-center justify-center aspect-[16/9] sm:aspect-[2/1]">
             <Image 
               src={`https://placehold.co/800x400.png?text=${encodeURIComponent(story.title)}`}
               alt={`Placeholder for ${story.title}`}
               width={800}
               height={400}
-              className="w-full h-auto object-cover max-h-[400px]"
+              className="w-full h-full object-cover"
               data-ai-hint="story placeholder large"
             />
           </div>
         )}
 
-        <header className="mb-6">
-          <h1 className="text-4xl md:text-5xl font-headline font-bold mb-4">{story.title}</h1>
-          <div className="flex items-center space-x-4 text-muted-foreground text-sm">
+        <header className="mb-4 sm:mb-6">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-headline font-bold mb-3 sm:mb-4">{story.title}</h1>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4 text-muted-foreground text-sm">
             <Link href={`/profile/${story.authorId}`} className="flex items-center space-x-2 hover:text-primary transition-colors">
-              <Avatar className="h-8 w-8">
+              <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
                 <AvatarImage src={story.authorProfilePictureUrl || undefined} alt={story.authorUsername} />
-                <AvatarFallback>
-                  {story.authorUsername ? story.authorUsername.charAt(0).toUpperCase() : <User className="h-4 w-4"/>}
+                <AvatarFallback className="text-xs">
+                  {story.authorUsername ? story.authorUsername.charAt(0).toUpperCase() : <User className="h-3.5 w-3.5"/>}
                 </AvatarFallback>
               </Avatar>
-              <span>{story.authorUsername || "Anonymous"}</span>
+              <span className="text-sm">{story.authorUsername || "Anonymous"}</span>
             </Link>
-            <span className="flex items-center"><CalendarDays className="mr-1.5 h-4 w-4" /> Published on {new Date(story.createdAt).toLocaleDateString()}</span>
+            <span className="flex items-center text-xs sm:text-sm"><CalendarDays className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" /> Published on {new Date(story.createdAt).toLocaleDateString()}</span>
           </div>
         </header>
 
-        <Separator className="my-6" />
+        <Separator className="my-4 sm:my-6" />
         
         <div className="prose dark:prose-invert max-w-none">
           {rootNodesToRender.length > 0 ? (
-              renderNodesRecursive(rootNodesToRender, storyNodes, null, 0)
+              rootNodesToRender.map(node => (
+                <Fragment key={node.id}>
+                  <StoryNodeDisplay
+                    node={node}
+                    allNodes={storyNodes}
+                    storyId={story.id} 
+                    storyAuthorId={story.authorId}
+                    level={0}
+                    currentUser={currentUser}
+                    onVote={handleVoteOnNode}
+                    refreshAllNodes={fetchStoryAndNodes}
+                    isStoryAuthor={isAuthor}
+                  />
+                </Fragment>
+              ))
             ) : (
-              <Card className="p-6 text-center">
+              <Card className="p-4 sm:p-6 text-center">
                   <CardDescription>This story doesn't have any content yet. {isAuthor ? "Why not add the first node?" : ""}</CardDescription>
                   {isAuthor && 
-                      <Button asChild className="mt-4">
+                      <Button asChild className="mt-4" size="sm">
                           <Link href={`/stories/edit/${story.id}`}>Add First Node</Link>
                       </Button>
                   }
@@ -455,27 +457,26 @@ export default function StoryDetailPage() {
             )}
         </div>
 
+        <Separator className="my-6 sm:my-8" />
 
-        <Separator className="my-8" />
-
-        <footer className="space-y-6">
+        <footer className="space-y-4 sm:space-y-6">
           {story.tags && story.tags.length > 0 && (
             <div className="flex flex-wrap gap-2 items-center">
-              <Tag className="h-5 w-5 text-muted-foreground" />
+              <Tag className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
               {story.tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="text-sm">
+                <Badge key={tag} variant="secondary" className="text-xs sm:text-sm px-2 py-0.5 sm:px-2.5 sm:py-1">
                   <Link href={`/tags/${tag.toLowerCase()}`}>{tag}</Link>
                 </Badge>
               ))}
             </div>
           )}
 
-          <div className="flex items-center space-x-6 text-muted-foreground">
-            <span className="flex items-center"><Eye className="mr-1.5 h-5 w-5" /> {story.views || 0} views</span>
-            <span className="flex items-center"><Heart className="mr-1.5 h-5 w-5" /> {story.likes || 0} likes</span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-6 text-sm text-muted-foreground">
+            <span className="flex items-center"><Eye className="mr-1 sm:mr-1.5 h-4 w-4 sm:h-5 sm:w-5" /> {story.views || 0} views</span>
+            <span className="flex items-center"><Heart className="mr-1 sm:mr-1.5 h-4 w-4 sm:h-5 sm:w-5" /> {story.likes || 0} likes</span>
              <span className="flex items-center">
-              <MessageSquare className="mr-1.5 h-5 w-5" /> 
-              {storyNodes.reduce((acc, curr) => acc + (curr.commentCount || 0), 0)} total comments on nodes
+              <MessageSquare className="mr-1 sm:mr-1.5 h-4 w-4 sm:h-5 sm:w-5" /> 
+              {storyNodes.reduce((acc, curr) => acc + (curr.commentCount || 0), 0)} total comments
             </span>
           </div>
         </footer>
