@@ -6,7 +6,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { doc, getDoc, collection, getDocs, query, orderBy as firestoreOrderBy, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Story, StoryNode, StoryNodeComment } from "@/types";
+import type { Story, StoryNode, StoryNodeComment, UserProfile } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -18,8 +18,9 @@ import { Textarea } from "@/components/ui/textarea";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, Edit, Eye, Heart, Loader2, MessageSquare, Send, User, Tag, ThumbsUp, ThumbsDown, CornerDownRight } from "lucide-react";
-import { addCommentToStoryNodeAction, upvoteStoryNodeAction, downvoteStoryNodeAction } from "./actions";
+import { addCommentToStoryNodeAction, upvoteStoryNodeAction, downvoteStoryNodeAction } from "./actions.ts";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface StoryNodeDisplayProps {
   node: StoryNode;
@@ -27,23 +28,33 @@ interface StoryNodeDisplayProps {
   storyId: string;
   storyAuthorId: string;
   level?: number;
-  currentUserUid: string | undefined;
+  currentUser: UserProfile | null;
+  onVote: (nodeId: string, voteType: 'upvote' | 'downvote') => Promise<void>;
+  refreshAllNodes: () => void; 
 }
 
-const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({ node, allNodes, storyId, storyAuthorId, level = 0, currentUserUid }) => {
+const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({ 
+  node, 
+  allNodes, 
+  storyId, 
+  storyAuthorId, 
+  level = 0, 
+  currentUser,
+  onVote,
+  refreshAllNodes 
+}) => {
   const children = allNodes.filter(childNode => childNode.parentId === node.id).sort((a, b) => a.order - b.order);
   const [newComment, setNewComment] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [nodeComments, setNodeComments] = useState<StoryNodeComment[]>([]);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
   const { toast } = useToast();
-  const { currentUser } = useAuth();
 
-  const fetchNodeComments = useCallback(async () => {
-    if (!db || !storyId || !node.id) return;
+  const fetchNodeComments = useCallback(async (currentNodeId: string) => {
+    if (!db || !storyId || !currentNodeId) return;
     setIsLoadingComments(true);
     try {
-      const commentsRef = collection(db, "stories", storyId, "nodes", node.id, "comments");
+      const commentsRef = collection(db, "stories", storyId, "nodes", currentNodeId, "comments");
       const q = query(commentsRef, firestoreOrderBy("createdAt", "asc"));
       const querySnapshot = await getDocs(q);
       const fetchedComments: StoryNodeComment[] = [];
@@ -57,11 +68,11 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({ node, allNodes, sto
     } finally {
       setIsLoadingComments(false);
     }
-  }, [storyId, node.id, toast]);
+  }, [storyId, toast]);
 
   useEffect(() => {
-    fetchNodeComments();
-  }, [fetchNodeComments]);
+    fetchNodeComments(node.id);
+  }, [fetchNodeComments, node.id]);
 
 
   const handlePostComment = async (e: React.FormEvent) => {
@@ -79,84 +90,87 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({ node, allNodes, sto
     if (result.success) {
       toast({ title: "Comment Posted!" });
       setNewComment("");
-      fetchNodeComments(); // Re-fetch comments
+      fetchNodeComments(node.id); 
+      refreshAllNodes(); // Re-fetch all nodes to update comment counts
     } else {
       toast({ title: "Error", description: result.error, variant: "destructive" });
     }
     setIsSubmittingComment(false);
   };
 
-  const handleVote = async (type: 'upvote' | 'downvote') => {
+  const handleLocalVote = async (voteType: 'upvote' | 'downvote') => {
     if (!currentUser || !storyId || !node.id) {
-        toast({ title: "Error", description: "You must be logged in to vote.", variant: "destructive" });
+        toast({ title: "Authentication Required", description: "You must be logged in to vote.", variant: "destructive" });
         return;
     }
-    const action = type === 'upvote' ? upvoteStoryNodeAction : downvoteStoryNodeAction;
-    const result = await action({ storyId, nodeId: node.id, userId: currentUser.uid });
-
-    if (result.success) {
-        toast({ title: "Vote Counted!" });
-        // Ideally, we'd update the node's vote count in the local state
-        // For simplicity now, user might need to refresh to see updated global counts
-        // Or, the action could return the updated node to update state here.
-    } else {
-        toast({ title: "Error", description: result.error, variant: "destructive" });
-    }
+    await onVote(node.id, voteType);
   };
-
+  
+  const userVote = currentUser && node.votedBy ? node.votedBy[currentUser.uid] : null;
 
   return (
-    <div style={{ marginLeft: `${level * 20}px` }} className={`mt-4 p-4 border rounded-md shadow-sm ${level > 0 ? 'bg-muted/30' : 'bg-card'}`}>
+    <div style={{ marginLeft: `${level * 20}px` }} className={`mt-4 p-4 border rounded-lg shadow-sm ${level > 0 ? 'bg-muted/20' : 'bg-card'}`}>
       {level > 0 && <CornerDownRight className="inline-block h-4 w-4 mr-2 text-muted-foreground" />}
-      <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed space-y-2">
+      <div className="flex justify-between items-start mb-1">
+        <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+            <Avatar className="h-6 w-6">
+                <AvatarImage src={node.authorProfilePictureUrl || undefined} alt={node.authorUsername} />
+                <AvatarFallback>{node.authorUsername?.[0]?.toUpperCase() || 'A'}</AvatarFallback>
+            </Avatar>
+            <Link href={`/profile/${node.authorId}`} className="font-medium hover:underline text-foreground">{node.authorUsername}</Link>
+            <span>&bull;</span>
+            <span>{new Date(node.createdAt).toLocaleDateString()}</span>
+        </div>
+      </div>
+      
+      <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed space-y-2 mb-3">
         {node.content.split('\\n').map((paragraph, pIndex) => (
           paragraph.trim() ? <p key={`${node.id}-p-${pIndex}`}>{paragraph}</p> : null
         ))}
       </div>
-      <div className="flex items-center space-x-4 text-xs text-muted-foreground mt-3 pt-3 border-t">
-        <Button variant="ghost" size="sm" onClick={() => handleVote('upvote')} disabled={!currentUser}>
+      <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-3 pt-3 border-t">
+        <Button variant="ghost" size="sm" onClick={() => handleLocalVote('upvote')} disabled={!currentUser} 
+                className={cn(userVote === 'upvote' && 'text-primary bg-primary/10')}>
           <ThumbsUp className="mr-1.5 h-4 w-4" /> {node.upvotes || 0}
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => handleVote('downvote')} disabled={!currentUser}>
+        <Button variant="ghost" size="sm" onClick={() => handleLocalVote('downvote')} disabled={!currentUser}
+                className={cn(userVote === 'downvote' && 'text-destructive bg-destructive/10')}>
           <ThumbsDown className="mr-1.5 h-4 w-4" /> {node.downvotes || 0}
         </Button>
-        <span className="flex items-center"><MessageSquare className="mr-1.5 h-4 w-4" /> {nodeComments.length || node.commentCount || 0} comments</span>
-        <span className="text-xs">By: {node.authorUsername || "Unknown"}</span>
-        <span className="text-xs">On: {new Date(node.order).toLocaleDateString()}</span>
+        <span className="flex items-center"><MessageSquare className="mr-1.5 h-4 w-4" /> {node.commentCount || 0}</span>
       </div>
 
-      {/* Comments Section for this Node */}
-      <div className="mt-4 pl-4 border-l-2">
-        <h4 className="text-sm font-semibold mb-2">Comments on this node:</h4>
+      <div className="mt-4 pl-4 border-l-2 border-border/50">
+        <h4 className="text-sm font-semibold mb-2 text-foreground/80">Comments:</h4>
         {isLoadingComments ? (
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground py-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Loading comments...</span>
           </div>
         ) : nodeComments.length > 0 ? (
           <div className="space-y-3">
             {nodeComments.map(comment => (
-              <div key={comment.id} className="text-xs p-2 bg-background rounded-md shadow">
+              <div key={comment.id} className="text-xs p-2.5 bg-muted/50 rounded-md shadow-sm">
                  <div className="flex items-center mb-1">
                     <Avatar className="h-5 w-5 mr-2">
                         <AvatarImage src={comment.authorProfilePictureUrl || undefined} alt={comment.authorUsername} />
                         <AvatarFallback>{comment.authorUsername?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
                     </Avatar>
-                    <span className="font-semibold">{comment.authorUsername || "Anonymous"}</span>
+                    <Link href={`/profile/${comment.authorId}`} className="font-semibold text-foreground hover:underline">{comment.authorUsername || "Anonymous"}</Link>
                     <span className="ml-2 text-muted-foreground text-xs">
-                        {new Date(comment.createdAt).toLocaleString()}
+                        &bull; {new Date(comment.createdAt).toLocaleString()}
                     </span>
                 </div>
-                <p className="pl-7">{comment.text}</p>
+                <p className="pl-7 text-foreground/90">{comment.text}</p>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">No comments on this node yet.</p>
+          <p className="text-xs text-muted-foreground py-2">No comments on this node yet.</p>
         )}
 
         {currentUser && (
-          <form onSubmit={handlePostComment} className="mt-3 space-y-2">
+          <form onSubmit={handlePostComment} className="mt-4 space-y-2">
             <Textarea
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
@@ -178,7 +192,17 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({ node, allNodes, sto
       </div>
 
       {children.map(childNode => (
-        <StoryNodeDisplay key={childNode.id} node={childNode} allNodes={allNodes} storyId={storyId} storyAuthorId={storyAuthorId} level={level + 1} currentUserUid={currentUserUid}/>
+        <StoryNodeDisplay 
+            key={childNode.id} 
+            node={childNode} 
+            allNodes={allNodes} 
+            storyId={storyId} 
+            storyAuthorId={storyAuthorId} 
+            level={level + 1} 
+            currentUser={currentUser}
+            onVote={onVote}
+            refreshAllNodes={refreshAllNodes}
+        />
       ))}
     </div>
   );
@@ -197,64 +221,79 @@ export default function StoryDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Overall comments for the story (legacy, might be removed or re-purposed)
-  // const [newStoryComment, setNewStoryComment] = useState("");
-  // const [isSubmittingStoryComment, setIsSubmittingStoryComment] = useState(false);
+  const fetchStoryAndNodes = useCallback(async () => {
+    if (!storyId || !db) {
+      setError(storyId ? "Database service is unavailable." : "Story ID is missing.");
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const storyRef = doc(db, "stories", storyId);
+      const storySnap = await getDoc(storyRef);
 
+      if (storySnap.exists()) {
+        const storyData = storySnap.data() as Omit<Story, 'id'>;
+        setStory({ 
+          id: storySnap.id, 
+          ...storyData,
+          createdAt: Number(storyData.createdAt),
+          updatedAt: Number(storyData.updatedAt),
+        });
+
+        const nodesCollectionRef = collection(db, "stories", storyId, "nodes");
+        // Fetch nodes ordered by their 'order' field (timestamp)
+        const nodesQuery = query(nodesCollectionRef, firestoreOrderBy("order", "asc"));
+        const nodesSnapshot = await getDocs(nodesQuery);
+        
+        const fetchedNodes: StoryNode[] = [];
+        nodesSnapshot.forEach((nodeDoc) => {
+          const nodeData = nodeDoc.data();
+          fetchedNodes.push({
+            id: nodeDoc.id,
+            ...nodeData,
+            order: Number(nodeData.order), 
+            votedBy: nodeData.votedBy || {}, 
+            upvotes: nodeData.upvotes || 0,
+            downvotes: nodeData.downvotes || 0,
+            commentCount: nodeData.commentCount || 0,
+          } as StoryNode);
+        });
+        setStoryNodes(fetchedNodes);
+
+      } else {
+        setError("Story not found.");
+        setStory(null);
+        setStoryNodes([]);
+      }
+    } catch (e) {
+      console.error("Error fetching story and nodes:", e);
+      setError("Failed to load the story. Please try again later.");
+    }
+    setLoading(false);
+  }, [storyId]);
 
   useEffect(() => {
-    if (storyId && db) {
-      const fetchStoryAndNodes = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-          const storyRef = doc(db, "stories", storyId);
-          const storySnap = await getDoc(storyRef);
+    fetchStoryAndNodes();
+  }, [fetchStoryAndNodes]);
 
-          if (storySnap.exists()) {
-            const storyData = storySnap.data() as Omit<Story, 'id'>;
-            setStory({ 
-              id: storySnap.id, 
-              ...storyData,
-              createdAt: Number(storyData.createdAt),
-              updatedAt: Number(storyData.updatedAt),
-            });
-
-            const nodesCollectionRef = collection(db, "stories", storyId, "nodes");
-            const nodesQuery = query(nodesCollectionRef, firestoreOrderBy("order", "asc"));
-            const nodesSnapshot = await getDocs(nodesQuery);
-            
-            const fetchedNodes: StoryNode[] = [];
-            nodesSnapshot.forEach((nodeDoc) => {
-              const nodeData = nodeDoc.data();
-              fetchedNodes.push({
-                id: nodeDoc.id,
-                ...nodeData,
-                order: Number(nodeData.order) // Ensure order is number for sorting
-              } as StoryNode);
-            });
-            setStoryNodes(fetchedNodes);
-
-          } else {
-            setError("Story not found.");
-            setStory(null);
-            setStoryNodes([]);
-          }
-        } catch (e) {
-          console.error("Error fetching story and nodes:", e);
-          setError("Failed to load the story. Please try again later.");
-        }
-        setLoading(false);
-      };
-      fetchStoryAndNodes();
-    } else if (!db) {
-      setError("Database service is unavailable.");
-      setLoading(false);
-    } else if (!storyId) {
-        setError("Story ID is missing.");
-        setLoading(false);
+  const handleVoteOnNode = async (nodeId: string, voteType: 'upvote' | 'downvote') => {
+    if (!currentUser || !storyId) {
+        toast({ title: "Authentication Required", description: "You must be logged in to vote.", variant: "destructive" });
+        return;
     }
-  }, [storyId]);
+    const action = voteType === 'upvote' ? upvoteStoryNodeAction : downvoteStoryNodeAction;
+    const result = await action({ storyId, nodeId, userId: currentUser.uid });
+
+    if (result.success) {
+        toast({ title: "Vote Counted!" });
+        fetchStoryAndNodes(); 
+    } else {
+        toast({ title: "Error", description: result.error || "Failed to record vote.", variant: "destructive" });
+    }
+  };
+  
 
   if (loading || authLoading) {
     return (
@@ -317,10 +356,11 @@ export default function StoryDetailPage() {
               height={400}
               className="w-full h-auto object-cover max-h-[400px]"
               data-ai-hint="story cover large"
+              priority // Add priority if it's LCP
             />
           </div>
         )}
-        {!story.coverImageUrl && (
+        {!story.coverImageUrl && story.title && (
            <div className="mb-8 rounded-lg overflow-hidden shadow-lg bg-muted flex items-center justify-center h-[300px] md:h-[400px]">
             <Image 
               src={`https://placehold.co/800x400.png?text=${encodeURIComponent(story.title)}`}
@@ -351,7 +391,6 @@ export default function StoryDetailPage() {
 
         <Separator className="my-6" />
 
-        {/* Render story nodes recursively */}
         {rootNodes.length > 0 ? (
             rootNodes.map(node => (
               <StoryNodeDisplay 
@@ -360,11 +399,20 @@ export default function StoryDetailPage() {
                 allNodes={storyNodes} 
                 storyId={story.id}
                 storyAuthorId={story.authorId}
-                currentUserUid={currentUser?.uid}
+                currentUser={currentUser}
+                onVote={handleVoteOnNode}
+                refreshAllNodes={fetchStoryAndNodes} // Pass the refetch function
               />
             ))
           ) : (
-            <p>This story doesn't have any content yet.</p>
+            <Card className="p-6 text-center">
+                <CardDescription>This story doesn't have any content yet. {isAuthor ? "Why not add the first node?" : ""}</CardDescription>
+                {isAuthor && 
+                    <Button asChild className="mt-4">
+                        <Link href={`/stories/edit/${story.id}`}>Add First Node</Link>
+                    </Button>
+                }
+            </Card>
           )}
 
 
@@ -385,56 +433,9 @@ export default function StoryDetailPage() {
           <div className="flex items-center space-x-6 text-muted-foreground">
             <span className="flex items-center"><Eye className="mr-1.5 h-5 w-5" /> {story.views || 0} views</span>
             <span className="flex items-center"><Heart className="mr-1.5 h-5 w-5" /> {story.likes || 0} likes</span>
-            {/* Overall story comment count might need to be aggregated from all nodes or a separate field */}
-            {/* <span className="flex items-center"><MessageSquare className="mr-1.5 h-5 w-5" /> {story.commentCount || 0} comments</span> */}
           </div>
         </footer>
       </article>
-
-      <Separator className="my-10" />
-
-      {/* Legacy Overall Story Comments Section - Consider removing or adapting for global story discussion */}
-      {/* 
-      <section className="space-y-6">
-        <h2 className="text-2xl font-headline font-semibold">General Story Comments</h2>
-        {currentUser ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl font-headline">Leave a General Comment</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Textarea 
-                value={newStoryComment}
-                onChange={(e) => setNewStoryComment(e.target.value)}
-                placeholder={`Commenting as ${currentUser.displayName || currentUser.email}...`} 
-                className="min-h-[100px]" 
-               />
-            </CardContent>
-            <CardFooter>
-              <Button className="ml-auto" onClick={handlePostStoryComment} disabled={isSubmittingStoryComment || !newStoryComment.trim()}>
-                {isSubmittingStoryComment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Post Comment
-              </Button>
-            </CardFooter>
-          </Card>
-        ) : (
-          <Card className="p-6 text-center bg-muted/50">
-            <CardDescription>
-              <Link href={`/login?redirect=/stories/${story.id}`} className="text-primary hover:underline font-semibold">Log in</Link> or <Link href={`/signup?redirect=/stories/${story.id}`} className="text-primary hover:underline font-semibold">sign up</Link> to leave a comment.
-            </CardDescription>
-          </Card>
-        )}
-        
-        <div className="py-6 text-center text-muted-foreground">
-          <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-50" />
-          <p>No general comments yet. Share your overall thoughts!</p>
-        </div>
-      </section>
-      */}
     </div>
   );
 }
-
-      
-      
-    

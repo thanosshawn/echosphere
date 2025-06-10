@@ -13,46 +13,54 @@ export interface UserProfile extends FirebaseUser {
 export interface Story {
   id: string;
   authorId: string;
-  authorUsername: string; 
+  authorUsername: string;
   authorProfilePictureUrl?: string;
   title: string;
-  coverImageUrl?: string; // From Supabase
+  coverImageUrl?: string | null; // From Supabase
   tags: string[];
   category: string;
   status: 'draft' | 'published';
   createdAt: number; // Store as timestamp for the story entity itself
   updatedAt: number; // Store as timestamp, updated when story metadata or any part changes
   views: number;
-  likes: number;
-  commentCount: number;
-  partCount: number; 
-  firstPartExcerpt: string; 
+  likes: number; // Overall story likes, distinct from node votes
+  // commentCount: number; // Overall story comments, might be an aggregation or separate
+  nodeCount: number;
+  firstNodeExcerpt: string;
+  isLocked: boolean; // New: For story locking
+  canonicalBranchNodeId: string | null; // New: For designating a canonical branch
 }
 
-export interface StoryPart {
-  id: string; // Firestore document ID for this part
-  storyId: string; // ID of the parent Story document
-  authorId: string;
-  content: string; // Rich text (HTML or JSON from Tiptap) for this specific part
-  order: number;   // To maintain sequence of parts (e.g., 1, 2, 3...)
-  createdAt: number; // Timestamp for this part's creation
-  updatedAt: number; // Timestamp for this part's last update
-}
-
-export interface Comment {
+export interface StoryNode {
   id: string;
   storyId: string;
   authorId: string;
-  authorUsername:string;
+  authorUsername: string; // Denormalized for easier display
+  authorProfilePictureUrl?: string; // Denormalized
+  content: string;
+  order: number; // Timestamp for chronological sorting of siblings
+  parentId: string | null;
+  createdAt: number;
+  updatedAt: number;
+  upvotes: number;
+  downvotes: number;
+  votedBy: { [userId: string]: 'upvote' | 'downvote' }; // Map of userId to their vote type
+  commentCount?: number; // Optional: count of comments directly on this node
+}
+
+export interface StoryNodeComment {
+  id: string;
+  storyId: string;
+  nodeId: string;
+  authorId: string;
+  authorUsername: string;
   authorProfilePictureUrl?: string;
   text: string;
-  parentId: string | null; // For threaded replies
-  depth: number; // 0, 1, 2
-  createdAt: number; // Store as timestamp
-  upvotes: number;
-  // downvotes: number; // Keeping it simple with just upvotes
-  // upvotedBy: Record<string, boolean>; // Users who upvoted: { [userId]: true }
+  parentId: string | null; // For threaded replies to comments
+  depth: number;
+  createdAt: number;
 }
+
 
 export interface Notification {
   id: string;
@@ -68,4 +76,3 @@ export interface Notification {
   highlight?: boolean; // From GenAI
   link?: string; // URL to navigate to
 }
-
