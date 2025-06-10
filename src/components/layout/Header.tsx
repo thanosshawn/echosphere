@@ -28,21 +28,25 @@ const Header = () => {
           <Button variant="ghost" asChild>
             <Link href="/stories">Stories</Link>
           </Button>
+          {/* "Create Story" link is now always visible */}
+          <Button variant="ghost" asChild>
+            <Link href="/stories/create">
+              <PlusCircle className="mr-2 h-4 w-4" /> Create Story
+            </Link>
+          </Button>
+          
           {loading ? (
-            <Skeleton className="h-10 w-24" />
+            <Skeleton className="h-10 w-24" /> 
           ) : currentUser ? (
             <>
-              <Button variant="ghost" asChild>
-                <Link href="/stories/create">
-                  <PlusCircle className="mr-2 h-4 w-4" /> Create Story
-                </Link>
-              </Button>
+              {/* Notifications Icon */}
               <Button variant="ghost" size="icon" asChild>
                 <Link href="/notifications">
                   <Bell className="h-5 w-5" />
                   <span className="sr-only">Notifications</span>
                 </Link>
               </Button>
+              {/* User Avatar and Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
