@@ -23,17 +23,19 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, UploadCloud } from "lucide-react";
-// Note: Tiptap editor integration and Supabase image upload are not implemented in this placeholder.
-// User would need to install @tiptap/react, tiptap extensions, and @supabase/supabase-js.
+import { createStoryAction, type CreateStoryActionInput } from "./actions";
 
+// This schema is for client-side form validation
 const storyFormSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters").max(150, "Title must be less than 150 characters"),
   content: z.string().min(50, "Story content must be at least 50 characters"),
   category: z.string().min(1, "Please select a category"),
   tags: z.string().optional(), // Comma-separated tags
   status: z.enum(["draft", "published"]),
-  coverImage: z.any().optional(), // Placeholder for file upload
+  coverImage: z.any().optional(), // Placeholder for file upload, not processed by server action yet
 });
+
+type StoryFormValues = z.infer<typeof storyFormSchema>;
 
 export default function CreateStoryPage() {
   const { currentUser, loading: authLoading } = useAuth();
@@ -47,7 +49,7 @@ export default function CreateStoryPage() {
     }
   }, [currentUser, authLoading, router]);
 
-  const form = useForm<z.infer<typeof storyFormSchema>>({
+  const form = useForm<StoryFormValues>({
     resolver: zodResolver(storyFormSchema),
     defaultValues: {
       title: "",
@@ -58,26 +60,40 @@ export default function CreateStoryPage() {
     },
   });
 
-  async function onSubmit(values: z.infer<typeof storyFormSchema>) {
+  async function onSubmit(values: StoryFormValues) {
     if (!currentUser) {
       toast({ title: "Authentication Error", description: "You must be logged in to create a story.", variant: "destructive"});
+      router.push("/login?redirect=/stories/create");
       return;
     }
     setIsSubmitting(true);
-    console.log("Story data:", values);
-    // Placeholder for actual submission logic (e.g., Server Action)
-    // 1. Upload cover image to Supabase (if provided)
-    // 2. Save story data to Firebase (Firestore or RTDB)
-    // Example: await createStoryAction({ ...values, authorId: currentUser.uid });
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    const actionInput: CreateStoryActionInput = {
+      ...values,
+      authorId: currentUser.uid,
+      authorUsername: currentUser.displayName || currentUser.email || "Anonymous User",
+      authorProfilePictureUrl: currentUser.photoURL,
+    };
+    
+    // Note: Cover image upload (values.coverImage) is not implemented in this step.
+    // It would require separate logic to upload to a service like Firebase Storage or Supabase
+    // and then passing the URL to the server action.
 
-    toast({ title: "Story Submitted!", description: values.status === "published" ? "Your story is now live." : "Your story has been saved as a draft."});
+    const result = await createStoryAction(actionInput);
+
+    if (result.error) {
+      toast({ title: "Submission Error", description: result.error, variant: "destructive" });
+    } else if (result.success && result.storyId) {
+      toast({ title: "Story Submitted!", description: result.success });
+      form.reset(); // Reset form on successful submission
+      // Redirect to the new story's page if ID is available, otherwise dashboard
+      // router.push(`/stories/${result.storyId}`); // Ideal redirect
+      router.push("/dashboard"); // Current redirect
+    } else {
+      toast({ title: "Unexpected Error", description: "Something went wrong. Please try again.", variant: "destructive" });
+    }
+
     setIsSubmitting(false);
-    // Redirect to the story page or dashboard
-    // router.push(`/stories/SOME_NEW_STORY_ID`); 
-    router.push("/dashboard");
   }
 
   if (authLoading || !currentUser) {
@@ -116,7 +132,7 @@ export default function CreateStoryPage() {
                   <FormItem>
                     <FormLabel className="text-lg">Your Narrative</FormLabel>
                     <FormControl>
-                      {/* Replace with Tiptap editor component */}
+                      {/* Replace with Tiptap editor component for rich text */}
                       <Textarea
                         placeholder="Once upon a time..."
                         className="min-h-[250px] resize-y"
@@ -124,7 +140,7 @@ export default function CreateStoryPage() {
                       />
                     </FormControl>
                     <FormDescription>
-                      Use the rich text editor to format your story. (Tiptap editor to be integrated here)
+                      Write your story here. Rich text editing capabilities (e.g., Tiptap) will be integrated later.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -184,12 +200,15 @@ export default function CreateStoryPage() {
                                 <p className="text-xs text-muted-foreground">SVG, PNG, JPG or GIF (MAX. 800x400px)</p>
                             </div>
                             <Input id="dropzone-file" type="file" className="hidden" accept="image/*" 
-                              onChange={(e) => form.setValue('coverImage', e.target.files ? e.target.files[0] : null)} />
+                              {...form.register('coverImage')} // Updated to use react-hook-form registration
+                             />
                         </label>
                     </div> 
                 </FormControl>
-                <FormDescription>Upload an image that represents your story. (Supabase upload to be integrated).</FormDescription>
-                <FormMessage />
+                <FormDescription>
+                  Upload an image that represents your story. (Image upload functionality to be implemented separately).
+                </FormDescription>
+                {form.formState.errors.coverImage && <FormMessage>{form.formState.errors.coverImage.message?.toString()}</FormMessage>}
               </FormItem>
 
 
