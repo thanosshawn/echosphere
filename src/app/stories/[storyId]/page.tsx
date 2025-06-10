@@ -14,7 +14,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-// Textarea removed
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, Edit, Eye, Heart, Loader2, MessageSquare, Send, User, Tag, ThumbsUp, ThumbsDown, CornerDownRight } from "lucide-react";
@@ -29,13 +28,13 @@ import * as z from "zod";
 
 
 const commentFormSchema = z.object({
-  commentText: z.string().min(1, "Comment cannot be empty (HTML allowed)."),
+  commentText: z.string().min(1, "Comment cannot be empty (HTML allowed).").refine(value => value !== '<p></p>', { message: "Comment cannot be empty." }),
 });
 type CommentFormValues = z.infer<typeof commentFormSchema>;
 
 interface StoryNodeDisplayProps {
   node: StoryNode;
-  allNodes: StoryNode[]; // All nodes for the story, to find children
+  allNodes: StoryNode[]; 
   storyId: string;
   storyAuthorId: string;
   level?: number;
@@ -54,7 +53,6 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
   onVote,
   refreshAllNodes 
 }) => {
-  // Find direct children of the current node
   const children = allNodes.filter(childNode => childNode.parentId === node.id).sort((a, b) => a.order - b.order);
   
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
@@ -95,7 +93,7 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
 
 
   const handlePostComment = async (values: CommentFormValues) => {
-    if (!currentUser || !values.commentText.trim() || !storyId || !node.id) return;
+    if (!currentUser || !values.commentText.trim() || values.commentText === "<p></p>" || !storyId || !node.id) return;
     setIsSubmittingComment(true);
     const result = await addCommentToStoryNodeAction({
       storyId,
@@ -328,22 +326,19 @@ export default function StoryDetailPage() {
   const renderNodesRecursive = (nodesToRender: StoryNode[], allNodes: StoryNode[], parentId: string | null, level: number = 0): JSX.Element[] => {
     return nodesToRender
       .filter(node => node.parentId === parentId)
-      .sort((a,b) => a.order - b.order) // Ensure chronological order for siblings
+      .sort((a,b) => a.order - b.order) 
       .map(node => (
         <Fragment key={node.id}>
           <StoryNodeDisplay
             node={node}
             allNodes={allNodes}
-            storyId={story!.id} // story is guaranteed to be non-null here
+            storyId={story!.id} 
             storyAuthorId={story!.authorId}
             level={level}
             currentUser={currentUser}
             onVote={handleVoteOnNode}
             refreshAllNodes={fetchStoryAndNodes}
           />
-          {/* Recursively render children for this node */}
-          {/* {renderNodesRecursive(allNodes, allNodes, node.id, level + 1)} */} 
-          {/* Corrected: children already filtered inside StoryNodeDisplay */}
         </Fragment>
       ));
   };
@@ -381,7 +376,6 @@ export default function StoryDetailPage() {
   }
   
   const isAuthor = currentUser?.uid === story.authorId;
-  // Initial call to renderNodesRecursive starts with parentId = null for root nodes
   const rootNodesToRender = storyNodes.filter(node => node.parentId === null);
 
 
@@ -445,19 +439,21 @@ export default function StoryDetailPage() {
         </header>
 
         <Separator className="my-6" />
-
-        {rootNodesToRender.length > 0 ? (
-            renderNodesRecursive(rootNodesToRender, storyNodes, null, 0)
-          ) : (
-            <Card className="p-6 text-center">
-                <CardDescription>This story doesn't have any content yet. {isAuthor ? "Why not add the first node?" : ""}</CardDescription>
-                {isAuthor && 
-                    <Button asChild className="mt-4">
-                        <Link href={`/stories/edit/${story.id}`}>Add First Node</Link>
-                    </Button>
-                }
-            </Card>
-          )}
+        
+        <div className="prose dark:prose-invert max-w-none">
+          {rootNodesToRender.length > 0 ? (
+              renderNodesRecursive(rootNodesToRender, storyNodes, null, 0)
+            ) : (
+              <Card className="p-6 text-center">
+                  <CardDescription>This story doesn't have any content yet. {isAuthor ? "Why not add the first node?" : ""}</CardDescription>
+                  {isAuthor && 
+                      <Button asChild className="mt-4">
+                          <Link href={`/stories/edit/${story.id}`}>Add First Node</Link>
+                      </Button>
+                  }
+              </Card>
+            )}
+        </div>
 
 
         <Separator className="my-8" />
@@ -479,7 +475,6 @@ export default function StoryDetailPage() {
             <span className="flex items-center"><Heart className="mr-1.5 h-5 w-5" /> {story.likes || 0} likes</span>
              <span className="flex items-center">
               <MessageSquare className="mr-1.5 h-5 w-5" /> 
-              {/* Sum of commentCounts from all nodes - this could be denormalized on Story doc for efficiency */}
               {storyNodes.reduce((acc, curr) => acc + (curr.commentCount || 0), 0)} total comments on nodes
             </span>
           </div>
