@@ -39,8 +39,6 @@ export default function StoryDetailPage() {
           const storySnap = await getDoc(storyRef);
           if (storySnap.exists()) {
             const storyData = storySnap.data() as Omit<Story, 'id'>;
-            // Ensure timestamps are numbers if they are Firestore Timestamps
-            // For now, assuming they are numbers as per createStoryAction
             setStory({ 
               id: storySnap.id, 
               ...storyData,
@@ -88,7 +86,6 @@ export default function StoryDetailPage() {
   }
 
   if (!story) {
-    // This case should ideally be covered by the error state, but as a fallback:
     return (
        <div className="text-center py-10">
         <h2 className="text-2xl font-semibold mb-4">Story not found.</h2>
@@ -103,7 +100,7 @@ export default function StoryDetailPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
-      <Button variant="outline" onClick={() => router.back()} className="mb-6">
+      <Button variant="outline" onClick={() => router.push('/stories')} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Stories
       </Button>
 
@@ -148,7 +145,7 @@ export default function StoryDetailPage() {
             <span className="flex items-center"><CalendarDays className="mr-1.5 h-4 w-4" /> Published on {new Date(story.createdAt).toLocaleDateString()}</span>
             {isAuthor && (
               <Button variant="outline" size="sm" asChild>
-                <Link href={`/stories/edit/${story.id}`}>
+                <Link href={`/stories/edit/${story.id}`}> {/* TODO: Implement edit page */}
                   <Edit className="mr-1.5 h-4 w-4" /> Edit Story
                 </Link>
               </Button>
@@ -158,15 +155,10 @@ export default function StoryDetailPage() {
 
         <Separator className="my-6" />
 
-        {/* Render HTML content safely if it comes from a trusted source / sanitized */}
-        {/* For now, treating as plain text or pre-formatted HTML */}
         <div 
           className="prose prose-lg dark:prose-invert max-w-none leading-relaxed"
-          // If story.content is HTML and sanitized:
-          // dangerouslySetInnerHTML={{ __html: story.content }} 
         >
-          {/* For plain text content: */}
-          {story.content.split('\\n').map((paragraph, index) => (
+          {story.content.split('\n').map((paragraph, index) => (
             <p key={index}>{paragraph}</p>
           ))}
         </div>
@@ -219,7 +211,6 @@ export default function StoryDetailPage() {
           </Card>
         )}
         
-        {/* Placeholder for existing comments */}
         <div className="py-6 text-center text-muted-foreground">
           <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-50" />
           <p>No comments yet. Be the first to share your thoughts!</p>

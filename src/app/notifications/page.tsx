@@ -1,91 +1,99 @@
+
 // src/app/notifications/page.tsx
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, query, where, orderBy as firestoreOrderBy, doc, updateDoc, writeBatch } from "firebase/firestore";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { BellRing, Check, Loader2, MessageSquare, UserPlus, Heart } from "lucide-react";
-import type { Notification } from "@/types"; // Assuming types are defined
+import type { Notification } from "@/types";
 import { cn } from "@/lib/utils";
-// import { summarizeNotifications } from "@/ai/flows/notification-summarizer"; // For potential client-side summarization or to trigger summarization
+import { useToast } from "@/hooks/use-toast";
 
-// Dummy data for notifications
-const dummyNotifications: Notification[] = [
-  {
-    id: "1",
-    userId: "user1",
-    type: "new_comment",
-    senderUsername: "JaneDoe",
-    storyId: "storyA",
-    message: "JaneDoe commented on your story 'Adventures in the Cloud'.",
-    isRead: false,
-    createdAt: Date.now() - 1000 * 60 * 30, // 30 minutes ago
-    highlight: true,
-    link: "/stories/storyA#comment-123",
-  },
-  {
-    id: "2",
-    userId: "user1",
-    type: "new_follower",
-    senderUsername: "JohnSmith",
-    message: "JohnSmith started following you.",
-    isRead: true,
-    createdAt: Date.now() - 1000 * 60 * 60 * 2, // 2 hours ago
-    link: "/profile/JohnSmith",
-  },
-  {
-    id: "3",
-    userId: "user1",
-    type: "story_like",
-    senderUsername: "AliceWonder",
-    storyId: "storyB",
-    message: "AliceWonder liked your story 'The Last Stand'.",
-    isRead: false,
-    createdAt: Date.now() - 1000 * 60 * 60 * 5, // 5 hours ago
-    highlight: false,
-    link: "/stories/storyB",
-  },
-   {
-    id: "4",
-    userId: "user1",
-    type: "welcome",
-    message: "Welcome to EchoSphere! We're excited to have you.",
-    isRead: false,
-    createdAt: Date.now() - 1000 * 60 * 60 * 24, // 1 day ago
-    highlight: true,
-    link: "/dashboard",
-  },
-];
 
 export default function NotificationsPage() {
   const { currentUser, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [notifications, setNotifications] = useState<Notification[]>(dummyNotifications); // Replace with actual data fetching
-  const [isLoading, setIsLoading] = useState(true); // For fetching notifications
+  const { toast } = useToast();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!authLoading && !currentUser) {
       router.push("/login?redirect=/notifications");
-    } else if (currentUser) {
-      // Fetch actual notifications here
-      // e.g., fetchNotifications(currentUser.uid).then(setNotifications);
-      setIsLoading(false); // Simulate fetch completion
-    }
-  }, [currentUser, authLoading, router]);
+    } else if (currentUser && db) {
+      setIsLoading(true);
+      const notificationsCollectionRef = collection(db, "notifications");
+      const q = firestoreQuery(
+        notificationsCollectionRef,
+        where("userId", "==", currentUser.uid),
+        firestoreOrderBy("createdAt", "desc")
+      );
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(n => n.id === id ? { ...n, isRead: true } : n)
-    );
-    // API call to mark as read on backend
+      getDocs(q)
+        .then((querySnapshot) => {
+          const fetchedNotifications: Notification[] = [];
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            fetchedNotifications.push({
+              id: doc.id,
+              ...data,
+              createdAt: Number(data.createdAt), // Ensure it's a number
+            } as Notification);
+          });
+          setNotifications(fetchedNotifications);
+        })
+        .catch((error) => {
+          console.error("Error fetching notifications:", error);
+          toast({ title: "Error", description: "Could not load notifications.", variant: "destructive" });
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    } else if (!db && currentUser) {
+        toast({ title: "Error", description: "Database service unavailable.", variant: "destructive" });
+        setIsLoading(false);
+    }
+  }, [currentUser, authLoading, router, toast]);
+
+  const markAsRead = async (id: string) => {
+    if (!db) return;
+    try {
+      const notificationRef = doc(db, "notifications", id);
+      await updateDoc(notificationRef, { isRead: true });
+      setNotifications(prev =>
+        prev.map(n => n.id === id ? { ...n, isRead: true } : n)
+      );
+    } catch (error) {
+        console.error("Error marking notification as read:", error);
+        toast({ title: "Error", description: "Failed to mark as read.", variant: "destructive" });
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-    // API call to mark all as read
+  const markAllAsRead = async () => {
+    if (!db || !currentUser) return;
+    const unreadNotifications = notifications.filter(n => !n.isRead);
+    if (unreadNotifications.length === 0) return;
+
+    const batch = writeBatch(db);
+    unreadNotifications.forEach(notification => {
+      const notificationRef = doc(db, "notifications", notification.id);
+      batch.update(notificationRef, { isRead: true });
+    });
+
+    try {
+      await batch.commit();
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+      toast({ title: "Error", description: "Failed to mark all as read.", variant: "destructive" });
+    }
   };
   
   const getNotificationIcon = (type: Notification['type']) => {
@@ -94,9 +102,9 @@ export default function NotificationsPage() {
       case 'new_reply':
         return <MessageSquare className="h-5 w-5 text-primary" />;
       case 'new_follower':
-        return <UserPlus className="h-5 w-5 text-green-500" />;
+        return <UserPlus className="h-5 w-5 text-green-500" />; // Direct Tailwind color, consider theme variable
       case 'story_like':
-        return <Heart className="h-5 w-5 text-red-500" />;
+        return <Heart className="h-5 w-5 text-red-500" />; // Direct Tailwind color, consider theme variable
       case 'welcome':
       case 'system':
       default:
@@ -175,9 +183,13 @@ export default function NotificationsPage() {
           <CardContent className="text-center">
             <BellRing className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <CardDescription>You have no new notifications.</CardDescription>
+            <Button variant="link" asChild className="mt-2">
+                <Link href="/dashboard">Go to Dashboard</Link>
+            </Button>
           </CardContent>
         </Card>
       )}
     </div>
   );
 }
+
