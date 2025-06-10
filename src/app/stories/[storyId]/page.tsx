@@ -126,7 +126,7 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
   };
   
   const userVote = currentUser && node.votedBy ? node.votedBy[currentUser.uid] : null;
-  const nodeIndentation = level * 16; // Reduced indentation for mobile
+  const nodeIndentation = level * 16; 
 
   return (
     <div style={{ marginLeft: `${nodeIndentation}px` }} className={cn("mt-4 rounded-lg shadow-sm", level > 0 ? 'bg-muted/20 p-3 sm:p-4' : 'bg-card p-4 sm:p-5')}>
@@ -135,9 +135,11 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
         <div className="flex items-center space-x-2 text-xs text-muted-foreground">
             <Avatar className="h-6 w-6">
                 <AvatarImage src={node.authorProfilePictureUrl || undefined} alt={node.authorUsername} />
-                <AvatarFallback className="text-xs">{node.authorUsername?.[0]?.toUpperCase() || 'A'}</AvatarFallback>
+                <AvatarFallback className="text-xs">
+                  {node.authorUsername ? node.authorUsername.charAt(0).toUpperCase() : <User className="h-3 w-3" />}
+                </AvatarFallback>
             </Avatar>
-            <Link href={`/profile/${node.authorId}`} className="font-medium hover:underline text-foreground">{node.authorUsername}</Link>
+            <Link href={`/profile/${node.authorId}`} className="font-medium hover:underline text-foreground">{node.authorUsername || "Anonymous"}</Link>
             <span>&bull;</span>
             <span>{new Date(node.createdAt).toLocaleDateString()}</span>
              {isStoryAuthor && (
@@ -179,7 +181,9 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
                  <div className="flex items-center mb-1">
                     <Avatar className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2">
                         <AvatarImage src={comment.authorProfilePictureUrl || undefined} alt={comment.authorUsername} />
-                        <AvatarFallback className="text-2xs sm:text-xs">{comment.authorUsername?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
+                        <AvatarFallback className="text-2xs sm:text-xs">
+                           {comment.authorUsername ? comment.authorUsername.charAt(0).toUpperCase() : <User className="h-3 w-3" />}
+                        </AvatarFallback>
                     </Avatar>
                     <Link href={`/profile/${comment.authorId}`} className="font-semibold text-foreground hover:underline text-xs sm:text-sm">{comment.authorUsername || "Anonymous"}</Link>
                     <span className="ml-1.5 sm:ml-2 text-muted-foreground text-2xs sm:text-xs">
@@ -371,7 +375,7 @@ export default function StoryDetailPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
-        <Button variant="outline" onClick={() => router.push('/stories')} size="sm">
+        <Button variant="outline" onClick={() => router.push('/')} size="sm"> {/* Changed to / from /stories */}
           <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to Stories
         </Button>
         {isAuthor && (
@@ -417,7 +421,7 @@ export default function StoryDetailPage() {
               <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
                 <AvatarImage src={story.authorProfilePictureUrl || undefined} alt={story.authorUsername} />
                 <AvatarFallback className="text-xs">
-                  {story.authorUsername ? story.authorUsername.charAt(0).toUpperCase() : <User className="h-3.5 w-3.5"/>}
+                  {story.authorUsername ? story.authorUsername.charAt(0).toUpperCase() : <User className="h-4 w-4"/>}
                 </AvatarFallback>
               </Avatar>
               <span className="text-sm">{story.authorUsername || "Anonymous"}</span>

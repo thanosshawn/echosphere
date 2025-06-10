@@ -8,7 +8,7 @@ import { useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Loader2, Edit3, Activity, UserCircle, ShieldAlert } from "lucide-react"; // Replaced User with UserCircle for distinction
+import { Loader2, Edit3, Activity, UserCircle, ShieldAlert } from "lucide-react";
 
 export default function DashboardPage() {
   const { currentUser, loading } = useAuth();

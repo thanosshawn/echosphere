@@ -1,3 +1,4 @@
+
 // src/components/auth/AuthForm.tsx
 "use client";
 
@@ -26,7 +27,7 @@ import {
   signInAnonymously,
   updateProfile
 } from "firebase/auth";
-import { Chrome } from "lucide-react"; // Using Chrome as a stand-in for Google icon
+import { Chrome, Loader2 } from "lucide-react"; // Using Chrome as a stand-in for Google icon, Added Loader2
 
 interface AuthFormProps {
   mode: "login" | "signup";
@@ -41,7 +42,7 @@ const formSchema = z.object({
 const AuthForm: React.FC<AuthFormProps> = ({ mode }) => {
   const { toast } = useToast();
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isAnonLoading, setIsAnonLoading] = useState(false);
 
@@ -55,14 +56,13 @@ const AuthForm: React.FC<AuthFormProps> = ({ mode }) => {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    setIsLoading(true);
+    setIsLoadingEmail(true);
     try {
       if (mode === "signup") {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
         if (values.username && userCredential.user) {
           await updateProfile(userCredential.user, { displayName: values.username });
         }
-        // Add user to Firestore 'users' collection here if needed
         toast({ title: "Account created successfully!", description: "Welcome to EchoSphere." });
         router.push("/dashboard"); 
       } else {
@@ -77,7 +77,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ mode }) => {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsLoadingEmail(false);
     }
   }
 
@@ -86,7 +86,6 @@ const AuthForm: React.FC<AuthFormProps> = ({ mode }) => {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-      // Add/update user in Firestore 'users' collection here if needed
       toast({ title: "Signed in with Google successfully!" });
       router.push("/dashboard");
     } catch (error: any) {
@@ -117,6 +116,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ mode }) => {
     }
   };
 
+  const anyLoading = isLoadingEmail || isGoogleLoading || isAnonLoading;
 
   return (
     <Form {...form}>
@@ -129,7 +129,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ mode }) => {
               <FormItem>
                 <FormLabel>Username</FormLabel>
                 <FormControl>
-                  <Input placeholder="Choose a username" {...field} />
+                  <Input placeholder="Choose a username" {...field} disabled={anyLoading} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -143,7 +143,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ mode }) => {
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input type="email" placeholder="you@example.com" {...field} />
+                <Input type="email" placeholder="you@example.com" {...field} disabled={anyLoading} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -156,14 +156,14 @@ const AuthForm: React.FC<AuthFormProps> = ({ mode }) => {
             <FormItem>
               <FormLabel>Password</FormLabel>
               <FormControl>
-                <Input type="password" placeholder="••••••••" {...field} />
+                <Input type="password" placeholder="••••••••" {...field} disabled={anyLoading} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading ? "Processing..." : mode === "signup" ? "Create Account" : "Log In"}
+        <Button type="submit" className="w-full" disabled={anyLoading}>
+          {isLoadingEmail ? <Loader2 className="animate-spin" /> : mode === "signup" ? "Create Account" : "Log In"}
         </Button>
       </form>
       <div className="relative my-6">
@@ -177,11 +177,11 @@ const AuthForm: React.FC<AuthFormProps> = ({ mode }) => {
         </div>
       </div>
       <div className="space-y-3">
-        <Button variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={isGoogleLoading || isLoading}>
-          {isGoogleLoading ? "Processing..." : <><Chrome className="mr-2 h-4 w-4" /> Google</>}
+        <Button variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={anyLoading}>
+          {isGoogleLoading ? <Loader2 className="animate-spin" /> : <><Chrome className="mr-2 h-4 w-4" /> Google</>}
         </Button>
-        <Button variant="outline" className="w-full" onClick={handleAnonymousSignIn} disabled={isAnonLoading || isLoading}>
-          {isAnonLoading ? "Processing..." : "Sign in Anonymously"}
+        <Button variant="outline" className="w-full" onClick={handleAnonymousSignIn} disabled={anyLoading}>
+          {isAnonLoading ? <Loader2 className="animate-spin" /> : "Sign in Anonymously"}
         </Button>
       </div>
     </Form>
