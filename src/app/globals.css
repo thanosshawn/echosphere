@@ -193,7 +193,23 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground transition-colors duration-300 ease-in-out;
+    @apply bg-background text-foreground transition-colors duration-300 ease-in-out relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; /* Changed from absolute to fixed for full viewport coverage regardless of scroll */
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-image: url('https://storage.googleapis.com/projectx-upload/229f0585-0b29-4c99-94bc-c5bbdc159d6d/image.jpeg'); /* data-ai-hint: 'smiling woman portrait' */
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-attachment: fixed; /* Optional: for parallax effect */
+    opacity: 0.07; /* Adjust for desired subtlety */
+    z-index: -1; /* Place it behind all other content */
   }
 
   /* Tiptap editor styling */
