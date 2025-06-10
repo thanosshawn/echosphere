@@ -68,7 +68,7 @@ const RichTextEditorToolbar = ({ editor }: { editor: Editor | null }) => {
   }, [editor]);
 
   const addImage = useCallback(() => {
-    const url = window.prompt('Image URL');
+    const url = window.prompt('Enter the URL of the image:');
     if (url) {
       editor.chain().focus().setImage({ src: url }).run();
     }
@@ -173,3 +173,5 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialContent = '', on
 };
 
 export default RichTextEditor;
+
+    
