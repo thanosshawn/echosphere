@@ -28,7 +28,7 @@ const Header = () => {
         <Logo />
         <nav className="flex items-center gap-2 md:gap-4"> {/* Adjusted gap for smaller screens */}
           <Button variant="ghost" asChild>
-            <Link href="/stories">Stories</Link>
+            <Link href="/">Stories</Link>
           </Button>
           <Button variant="ghost" asChild>
             <Link href="/stories/create">
