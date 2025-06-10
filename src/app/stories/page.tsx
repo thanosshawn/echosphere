@@ -3,7 +3,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs, orderBy as firestoreOrderBy, query as firestoreQuery, where } from "firebase/firestore";
+import { collection, getDocs, orderBy as firestoreOrderBy, query, where } from "firebase/firestore"; // Corrected: query
 import { db } from "@/lib/firebase";
 import type { Story } from "@/types";
 
@@ -31,7 +31,7 @@ export default function StoriesPage() {
       setError(null);
       try {
         const storiesCollectionRef = collection(db, "stories");
-        const q = firestoreQuery(
+        const q = query( // Corrected: query
           storiesCollectionRef, 
           where("status", "==", "published"), 
           firestoreOrderBy("createdAt", "desc")
@@ -43,7 +43,6 @@ export default function StoriesPage() {
           fetchedStories.push({
             id: doc.id,
             ...data,
-            // Ensure required fields from Story type are present and correctly typed
             authorId: data.authorId,
             authorUsername: data.authorUsername,
             title: data.title,
@@ -156,7 +155,7 @@ export default function StoriesPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="flex-grow">
-                  <CardDescription className="line-clamp-3">{story.firstPartExcerpt}</CardDescription>
+                  <CardDescription className="line-clamp-3">{story.firstPartExcerpt || "No excerpt available."}</CardDescription>
                   <div className="mt-3 space-x-2">
                     {story.tags?.slice(0,3).map(tag => (
                       <Link key={tag} href={`/tags/${tag.toLowerCase()}`} className="text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded-full hover:bg-primary hover:text-primary-foreground transition-colors">

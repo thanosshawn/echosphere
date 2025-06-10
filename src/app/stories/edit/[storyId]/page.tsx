@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc, collection, getDocs, query, orderBy as firestoreOrderBy } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, query, orderBy as firestoreOrderBy } from "firebase/firestore"; // Corrected: query
 import { db } from "@/lib/firebase";
 import type { Story, StoryPart } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
@@ -69,10 +69,15 @@ export default function EditStoryPage() {
               setIsLoadingPage(false);
               return;
             }
-            setStory({ id: storySnap.id, ...storyData });
+            setStory({ 
+              id: storySnap.id, 
+              ...storyData,
+              createdAt: Number(storyData.createdAt),
+              updatedAt: Number(storyData.updatedAt),
+             });
 
             const partsCollectionRef = collection(db, "stories", storyId, "parts");
-            const partsQuery = firestoreQuery(partsCollectionRef, firestoreOrderBy("order", "asc"));
+            const partsQuery = query(partsCollectionRef, firestoreOrderBy("order", "asc")); // Corrected: query
             const partsSnapshot = await getDocs(partsQuery);
             const fetchedParts: StoryPart[] = [];
             partsSnapshot.forEach((partDoc) => fetchedParts.push({ id: partDoc.id, ...partDoc.data() } as StoryPart));
@@ -114,7 +119,7 @@ export default function EditStoryPage() {
       // Re-fetch parts to update the list
       if (db) { // Re-check db to satisfy TypeScript
         const partsCollectionRef = collection(db, "stories", storyId, "parts");
-        const partsQuery = firestoreQuery(partsCollectionRef, firestoreOrderBy("order", "asc"));
+        const partsQuery = query(partsCollectionRef, firestoreOrderBy("order", "asc")); // Corrected: query
         const partsSnapshot = await getDocs(partsQuery);
         const fetchedParts: StoryPart[] = [];
         partsSnapshot.forEach((partDoc) => fetchedParts.push({ id: partDoc.id, ...partDoc.data() } as StoryPart));
@@ -158,7 +163,7 @@ export default function EditStoryPage() {
               <div key={part.id} className="p-4 border rounded-md bg-muted/30">
                 <h3 className="text-lg font-semibold text-primary mb-1">Part {part.order}</h3>
                 <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-                  {part.content.split('\n').map((paragraph, pIndex) => (
+                  {part.content.split('\\n').map((paragraph, pIndex) => (
                     paragraph.trim() ? <p key={`${part.id}-p-${pIndex}`}>{paragraph}</p> : null
                   ))}
                 </div>

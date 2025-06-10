@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, query, where, orderBy as firestoreOrderBy, doc, updateDoc, writeBatch } from "firebase/firestore";
+import { collection, getDocs, query, where, orderBy as firestoreOrderBy, doc, updateDoc, writeBatch } from "firebase/firestore"; // Corrected: query
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,7 @@ export default function NotificationsPage() {
     } else if (currentUser && db) {
       setIsLoading(true);
       const notificationsCollectionRef = collection(db, "notifications");
-      const q = firestoreQuery(
+      const q = query( // Corrected: query
         notificationsCollectionRef,
         where("userId", "==", currentUser.uid),
         firestoreOrderBy("createdAt", "desc")
@@ -192,4 +192,3 @@ export default function NotificationsPage() {
     </div>
   );
 }
-

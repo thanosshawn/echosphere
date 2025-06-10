@@ -51,7 +51,7 @@ export default function StoryDetailPage() {
 
             // Fetch story parts from subcollection
             const partsCollectionRef = collection(db, "stories", storyId, "parts");
-            const partsQuery = firestoreQuery(partsCollectionRef, firestoreOrderBy("order", "asc"));
+            const partsQuery = query(partsCollectionRef, firestoreOrderBy("order", "asc")); // Corrected: query
             const partsSnapshot = await getDocs(partsQuery);
             
             const fetchedParts: StoryPart[] = [];
@@ -185,7 +185,7 @@ export default function StoryDetailPage() {
                 {storyParts.length > 1 && ( 
                   <h3 className="text-lg font-semibold text-muted-foreground mb-2">Part {part.order}</h3>
                 )}
-                {part.content.split('\n').map((paragraph, pIndex) => (
+                {part.content.split('\\n').map((paragraph, pIndex) => ( // Corrected: split by '\\n' for literal newlines
                   paragraph.trim() ? <p key={`${part.id}-p-${pIndex}`}>{paragraph}</p> : null
                 ))}
                 {index < storyParts.length - 1 && <Separator className="my-6" />}

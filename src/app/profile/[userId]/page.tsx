@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, query, where, orderBy as firestoreOrderBy, doc, getDoc } from "firebase/firestore"; // Added doc, getDoc
+import { collection, getDocs, query, where, orderBy as firestoreOrderBy, doc, getDoc } from "firebase/firestore"; // Corrected: query
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,7 @@ export default function UserProfilePage() {
         try {
           // Fetch User Stories
           const storiesCollectionRef = collection(db, "stories");
-          const storiesQuery = firestoreQuery(
+          const storiesQuery = query( // Corrected: query
             storiesCollectionRef,
             where("authorId", "==", userId),
             where("status", "==", "published"), 
@@ -221,7 +221,7 @@ export default function UserProfilePage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="flex-grow text-sm text-muted-foreground">
-                    <p className="line-clamp-2">{story.firstPartExcerpt}</p>
+                    <p className="line-clamp-2">{story.firstPartExcerpt || "No excerpt available."}</p>
                   </CardContent>
                   <CardFooter className="text-xs text-muted-foreground flex justify-between items-center border-t pt-3 mt-2">
                      <div className="flex items-center gap-2">
