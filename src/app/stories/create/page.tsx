@@ -1,3 +1,4 @@
+
 // src/app/stories/create/page.tsx
 "use client";
 
@@ -86,9 +87,7 @@ export default function CreateStoryPage() {
     } else if (result.success && result.storyId) {
       toast({ title: "Story Submitted!", description: result.success });
       form.reset(); // Reset form on successful submission
-      // Redirect to the new story's page if ID is available, otherwise dashboard
-      // router.push(`/stories/${result.storyId}`); // Ideal redirect
-      router.push("/dashboard"); // Current redirect
+      router.push(`/stories/${result.storyId}`); 
     } else {
       toast({ title: "Unexpected Error", description: "Something went wrong. Please try again.", variant: "destructive" });
     }
@@ -140,7 +139,7 @@ export default function CreateStoryPage() {
                       />
                     </FormControl>
                     <FormDescription>
-                      Write your story here. Rich text editing capabilities (e.g., Tiptap) will be integrated later.
+                      Write your story here. Rich text editing capabilities (e.g., Tiptap) will be integrated later. For new lines, use '\n'.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
