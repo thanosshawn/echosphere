@@ -13,9 +13,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { addStoryNodeAction } from "./actions";
 import type { AddStoryNodeActionInput } from "./actions";
+import { getWritingSuggestions } from '@/ai/flows/writing-suggester-flow';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Form,
   FormControl,
@@ -27,7 +29,7 @@ import {
 } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, ArrowLeft, PlusCircle, Edit2, Maximize } from "lucide-react";
+import { Loader2, ArrowLeft, PlusCircle, Edit2, Maximize, Lightbulb, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import RichTextEditor from "@/components/editor/RichTextEditor";
 import Link from "next/link";
@@ -48,8 +50,12 @@ export default function EditStoryPage() {
   const [story, setStory] = useState<Story | null>(null);
   const [storyNodes, setStoryNodes] = useState<StoryNode[]>([]);
   const [isLoadingPage, setIsLoadingPage] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmittingNode, setIsSubmittingNode] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
+  const [showSuggestionsDialog, setShowSuggestionsDialog] = useState(false);
 
   const form = useForm<AddNodeFormValues>({
     resolver: zodResolver(addNodeFormSchema),
@@ -105,13 +111,7 @@ export default function EditStoryPage() {
           const urlParams = new URLSearchParams(window.location.search);
           const targetNodeId = urlParams.get('nodeId');
           form.setValue('parentNodeId', targetNodeId || fetchedNodes[fetchedNodes.length - 1].id);
-        } else if (fetchedNodes.length === 0 && story?.firstNodeExcerpt) {
-           // This case implies we should be adding to the implicit first node,
-           // but current logic requires an explicit parentNodeId from existing fetched nodes.
-           // This might need a special ID for "root" or the first node if it's not fetched as a normal node.
-           // For now, if no nodes, selecting a parent is impossible.
         }
-
       } else {
         setError("Story not found.");
         toast({ title: "Error", description: "Story not found.", variant: "destructive" });
@@ -143,7 +143,7 @@ export default function EditStoryPage() {
 
   async function onAddNodeSubmit(values: AddNodeFormValues) {
     if (!currentUser || !story) return;
-    setIsSubmitting(true);
+    setIsSubmittingNode(true);
 
     const actionInput: AddStoryNodeActionInput = {
       storyId: story.id,
@@ -163,8 +163,30 @@ export default function EditStoryPage() {
       form.reset({ newNodeContent: "<p></p>", parentNodeId: result.newNodeId }); 
       fetchStoryAndNodes(); 
     }
-    setIsSubmitting(false);
+    setIsSubmittingNode(false);
   }
+
+  const handleGetSuggestions = async () => {
+    const currentText = form.getValues("newNodeContent");
+    const storyGenre = story?.category;
+
+    if (!currentText || currentText === "<p></p>") {
+      toast({ title: "Cannot get suggestions", description: "Please write some content for the new node first.", variant: "destructive" });
+      return;
+    }
+
+    setIsFetchingSuggestions(true);
+    try {
+      const result = await getWritingSuggestions({ currentText, storyGenre });
+      setAiSuggestions(result.suggestions);
+      setShowSuggestionsDialog(true);
+    } catch (error) {
+      console.error("Error fetching AI suggestions:", error);
+      toast({ title: "AI Suggestion Error", description: "Could not fetch suggestions at this time.", variant: "destructive" });
+    } finally {
+      setIsFetchingSuggestions(false);
+    }
+  };
 
   if (isLoadingPage || authLoading) {
     return <div className="flex items-center justify-center min-h-[calc(100vh-10rem)]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
@@ -179,123 +201,173 @@ export default function EditStoryPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8 py-4 sm:py-6">
-      <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={() => router.push(`/stories/${story.id}`)} size="sm">
-          <ArrowLeft className="mr-1.5 h-4 w-4" /> View Story
-        </Button>
-         <Button variant="outline" onClick={() => router.push(`/stories/edit/${story.id}`)} size="sm" className="flex items-center gap-1.5"> {/* Placeholder for story settings */}
-            <Edit2 className="h-4 w-4"/> Edit Story Details
-        </Button>
-      </div>
+    <>
+      <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8 py-4 sm:py-6">
+        <div className="flex items-center justify-between">
+          <Button variant="outline" onClick={() => router.push(`/stories/${story.id}`)} size="sm">
+            <ArrowLeft className="mr-1.5 h-4 w-4" /> View Story
+          </Button>
+          {/* Placeholder for story settings edit link */}
+          {/* <Button variant="outline" onClick={() => router.push(`/stories/settings/${story.id}`)} size="sm" className="flex items-center gap-1.5"> 
+              <Edit2 className="h-4 w-4"/> Edit Story Details
+          </Button> */}
+        </div>
 
-      <div className="text-center sm:text-left">
-        <h1 className="text-2xl sm:text-3xl font-headline">Edit Story:</h1>
-        <p className="text-lg sm:text-xl text-primary font-semibold">{story.title}</p>
-      </div>
-      
-      <Card className="rounded-lg">
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="font-headline text-xl sm:text-2xl">Existing Story Nodes</CardTitle>
-          <CardDescription className="text-sm">Review current nodes. New nodes branch from a selected parent.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 p-4 sm:p-6 max-h-[300px] overflow-y-auto">
-          {storyNodes.length > 0 ? (
-            storyNodes.map((node, index) => (
-              <div key={node.id} className="p-3 border rounded-md bg-muted/30 relative group">
-                <div className="flex justify-between items-start mb-1">
-                    <h3 className="text-sm sm:text-base font-semibold text-primary/90 pr-8">
-                        Node {index + 1} 
-                        {node.parentId && <span className="text-2xs sm:text-xs text-muted-foreground ml-1.5">(Parent: ...{node.parentId.slice(-4)})</span>}
-                    </h3>
-                    {/* Quick Edit Node Button - Placeholder */}
-                    {/* <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6 opacity-50 group-hover:opacity-100 transition-opacity">
-                        <Edit2 className="h-3.5 w-3.5"/>
-                    </Button> */}
+        <div className="text-center sm:text-left">
+          <h1 className="text-2xl sm:text-3xl font-headline">Edit Story:</h1>
+          <p className="text-lg sm:text-xl text-primary font-semibold">{story.title}</p>
+        </div>
+        
+        <Card className="rounded-lg">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="font-headline text-xl sm:text-2xl">Existing Story Nodes</CardTitle>
+            <CardDescription className="text-sm">Review current nodes. New nodes branch from a selected parent.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 p-4 sm:p-6 max-h-[300px] overflow-y-auto">
+            {storyNodes.length > 0 ? (
+              storyNodes.map((node, index) => (
+                <div key={node.id} className="p-3 border rounded-md bg-muted/30 relative group">
+                  <div className="flex justify-between items-start mb-1">
+                      <h3 className="text-sm sm:text-base font-semibold text-primary/90 pr-8">
+                          Node {index + 1} 
+                          {node.parentId && <span className="text-2xs sm:text-xs text-muted-foreground ml-1.5">(Parent: ...{node.parentId.slice(-4)})</span>}
+                      </h3>
+                  </div>
+                  <div 
+                      className="prose prose-xs sm:prose-sm dark:prose-invert max-w-none line-clamp-3"
+                      dangerouslySetInnerHTML={{ __html: node.content }} 
+                  />
+                  <p className="text-2xs sm:text-xs text-muted-foreground mt-1.5">
+                    By: {node.authorUsername} &bull; {new Date(node.createdAt).toLocaleDateString()}
+                  </p>
                 </div>
-                <div 
-                    className="prose prose-xs sm:prose-sm dark:prose-invert max-w-none line-clamp-3"
-                    dangerouslySetInnerHTML={{ __html: node.content }} 
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">No nodes yet (besides the initial one, if created).</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Separator />
+
+        <Card className="shadow-lg rounded-lg">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="font-headline text-xl sm:text-2xl">Add New Story Node</CardTitle>
+            <CardDescription className="text-sm">Continue your story by adding a new node.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onAddNodeSubmit)} className="space-y-5">
+                <FormField
+                  control={form.control}
+                  name="parentNodeId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base">Branch from Node</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="text-sm w-full">
+                            <SelectValue placeholder="Select parent node" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {storyNodes.length > 0 ? storyNodes.map((node, index) => (
+                            <SelectItem key={node.id} value={node.id} className="text-sm">
+                              Node {index + 1}: "{node.content.replace(/<[^>]+>/g, '').substring(0, 30)}..."
+                            </SelectItem>
+                          )) : <SelectItem value="" disabled>No existing nodes to select</SelectItem>}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-xs">Choose an existing node to add your contribution after.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                <p className="text-2xs sm:text-xs text-muted-foreground mt-1.5">
-                  By: {node.authorUsername} &bull; {new Date(node.createdAt).toLocaleDateString()}
-                </p>
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">No nodes yet (besides the initial one, if created).</p>
-          )}
-        </CardContent>
-      </Card>
 
-      <Separator />
-
-      <Card className="shadow-lg rounded-lg">
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="font-headline text-xl sm:text-2xl">Add New Story Node</CardTitle>
-          <CardDescription className="text-sm">Continue your story by adding a new node.</CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onAddNodeSubmit)} className="space-y-5">
-              <FormField
-                control={form.control}
-                name="parentNodeId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-base">Branch from Node</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                <FormField
+                  control={form.control}
+                  name="newNodeContent"
+                  render={({ field }) => (
+                    <FormItem>
+                       <div className="flex justify-between items-center mb-1">
+                        <FormLabel className="text-base">Content for New Node</FormLabel>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleGetSuggestions}
+                          disabled={isFetchingSuggestions}
+                        >
+                          {isFetchingSuggestions ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Lightbulb className="mr-2 h-4 w-4" />
+                          )}
+                          AI Suggestions
+                        </Button>
+                      </div>
                       <FormControl>
-                        <SelectTrigger className="text-sm w-full">
-                          <SelectValue placeholder="Select parent node" />
-                        </SelectTrigger>
+                        <RichTextEditor
+                          initialContent={field.value}
+                          onChange={field.onChange}
+                        />
                       </FormControl>
-                      <SelectContent>
-                        {storyNodes.length > 0 ? storyNodes.map((node, index) => (
-                          <SelectItem key={node.id} value={node.id} className="text-sm">
-                            Node {index + 1}: "{node.content.replace(/<[^>]+>/g, '').substring(0, 30)}..."
-                          </SelectItem>
-                        )) : <SelectItem value="" disabled>No existing nodes to select</SelectItem>}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription className="text-xs">Choose an existing node to add your contribution after.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
+                       <FormDescription className="text-xs">Write your contribution here. Use the toolbar for formatting.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="flex flex-col sm:flex-row justify-end pt-3">
+                  <Button type="submit" disabled={isSubmittingNode || !form.formState.isValid || storyNodes.length === 0} className="w-full sm:w-auto">
+                    {isSubmittingNode && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add Node
+                  </Button>
+                </div>
+                 {storyNodes.length === 0 && (
+                  <p className="text-xs text-destructive text-center mt-2">
+                    This story doesn't have any selectable parent nodes yet. An initial node must exist.
+                  </p>
                 )}
-              />
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+      </div>
 
-              <FormField
-                control={form.control}
-                name="newNodeContent"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-base">Content for New Node</FormLabel>
-                    <FormControl>
-                      <RichTextEditor
-                        initialContent={field.value}
-                        onChange={field.onChange}
-                      />
-                    </FormControl>
-                     <FormDescription className="text-xs">Write your contribution here. Use the toolbar for formatting.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="flex flex-col sm:flex-row justify-end pt-3">
-                <Button type="submit" disabled={isSubmitting || !form.formState.isValid || storyNodes.length === 0} className="w-full sm:w-auto">
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Node
-                </Button>
-              </div>
-               {storyNodes.length === 0 && (
-                <p className="text-xs text-destructive text-center mt-2">
-                  Cannot add a node yet. The story must have at least one initial node created (which happens upon story creation). If this story had an initial node, it might not be listed here for selection as a parent.
-                </p>
-              )}
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </div>
+      <Dialog open={showSuggestionsDialog} onOpenChange={setShowSuggestionsDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>AI Writing Suggestions</DialogTitle>
+            <DialogDescription>
+              Here are some ideas to help you continue your story. Click the copy icon to copy a suggestion.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4 max-h-[50vh] overflow-y-auto">
+            {aiSuggestions.length > 0 ? aiSuggestions.map((suggestion, index) => (
+              <Card key={index} className="p-3 bg-muted/50">
+                <div className="flex justify-between items-start gap-2">
+                  <p className="text-sm flex-grow">{suggestion}</p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 flex-shrink-0"
+                    onClick={() => {
+                      navigator.clipboard.writeText(suggestion);
+                      toast({ title: "Copied to clipboard!" });
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </Card>
+            )) : <p className="text-sm text-muted-foreground text-center">No suggestions available at the moment.</p>}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowSuggestionsDialog(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
+

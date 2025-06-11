@@ -18,14 +18,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, UploadCloud, FileText } from "lucide-react";
+import { Loader2, UploadCloud, FileText, Lightbulb, Copy } from "lucide-react";
 import { createStoryAction } from "./actions"; 
-import type { CreateStoryFormValues } from "./actions"; 
 import RichTextEditor from "@/components/editor/RichTextEditor";
+import { getWritingSuggestions } from '@/ai/flows/writing-suggester-flow';
 
 const storyFormSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters").max(150, "Title must be less than 150 characters"),
@@ -46,6 +47,10 @@ export default function CreateStoryPage() {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
+  const [showSuggestionsDialog, setShowSuggestionsDialog] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !currentUser) {
@@ -101,172 +106,246 @@ export default function CreateStoryPage() {
     setIsSubmitting(false);
   }
 
+  const handleGetSuggestions = async () => {
+    const currentText = form.getValues("initialNodeContent");
+    const storyGenre = form.getValues("category");
+
+    if (!currentText || currentText === "<p></p>") {
+      toast({ title: "Cannot get suggestions", description: "Please write some content first.", variant: "destructive" });
+      return;
+    }
+
+    setIsFetchingSuggestions(true);
+    try {
+      const result = await getWritingSuggestions({ currentText, storyGenre });
+      setAiSuggestions(result.suggestions);
+      setShowSuggestionsDialog(true);
+    } catch (error) {
+      console.error("Error fetching AI suggestions:", error);
+      toast({ title: "AI Suggestion Error", description: "Could not fetch suggestions at this time.", variant: "destructive" });
+    } finally {
+      setIsFetchingSuggestions(false);
+    }
+  };
+
   if (authLoading || !currentUser) {
     return <div className="flex items-center justify-center min-h-[calc(100vh-10rem)]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-4 sm:py-8">
-      <div className="text-center mb-6 sm:mb-8">
-        <FileText className="h-12 w-12 text-primary mx-auto mb-2" />
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-headline">Create Your Story Thread</h1>
-      </div>
-      <Card className="shadow-xl rounded-lg">
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="font-headline text-xl sm:text-2xl">New Masterpiece</CardTitle>
-          <CardDescription className="text-sm">Fill in the details below to share your narrative.</CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-base">Story Title</FormLabel>
-                    <FormControl>
-                      <Input placeholder="A catchy title for your story" {...field} className="text-sm"/>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="initialNodeContent"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-base">Your Narrative (First Node)</FormLabel>
-                    <FormControl>
-                       <RichTextEditor
-                        initialContent={field.value}
-                        onChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormDescription className="text-xs">
-                      Write the first node of your story here. Use the toolbar for formatting.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+    <>
+      <div className="max-w-3xl mx-auto py-4 sm:py-8">
+        <div className="text-center mb-6 sm:mb-8">
+          <FileText className="h-12 w-12 text-primary mx-auto mb-2" />
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-headline">Create Your Story Thread</h1>
+        </div>
+        <Card className="shadow-xl rounded-lg">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="font-headline text-xl sm:text-2xl">New Masterpiece</CardTitle>
+            <CardDescription className="text-sm">Fill in the details below to share your narrative.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                 <FormField
                   control={form.control}
-                  name="category"
+                  name="title"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-base">Category</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="text-sm">
-                            <SelectValue placeholder="Select a category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="fiction">Fiction</SelectItem>
-                          <SelectItem value="non-fiction">Non-Fiction</SelectItem>
-                          <SelectItem value="poetry">Poetry</SelectItem>
-                          <SelectItem value="tech">Tech</SelectItem>
-                          <SelectItem value="life">Life</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                 <FormField
-                  control={form.control}
-                  name="tags"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-base">Tags</FormLabel>
+                      <FormLabel className="text-base">Story Title</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., adventure, sci-fi" {...field} className="text-sm"/>
+                        <Input placeholder="A catchy title for your story" {...field} className="text-sm"/>
                       </FormControl>
-                      <FormDescription className="text-xs">Comma-separated tags.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </div>
-              
-              <FormField
-                control={form.control}
-                name="coverImage"
-                render={({ field: { onChange, value, ...rest } }) => (
-                <FormItem>
-                    <FormLabel className="text-base">Cover Image (Optional)</FormLabel>
-                    <FormControl>
-                        <div className="flex items-center justify-center w-full">
-                            <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-32 sm:h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-muted transition-colors">
-                                <div className="flex flex-col items-center justify-center pt-4 pb-5 sm:pt-5 sm:pb-6">
-                                    <UploadCloud className="w-8 h-8 sm:w-10 sm:w-10 mb-2 sm:mb-3 text-muted-foreground" />
-                                    <p className="mb-1 text-xs sm:text-sm text-muted-foreground"><span className="font-semibold">Click to upload</span> or drag & drop</p>
-                                    <p className="text-2xs sm:text-xs text-muted-foreground">PNG, JPG, GIF, WEBP (MAX. 5MB)</p>
-                                </div>
-                                <Input 
-                                    id="dropzone-file" 
-                                    type="file" 
-                                    className="hidden" 
-                                    accept="image/png, image/jpeg, image/gif, image/webp"
-                                    onChange={(e) => {
-                                        const file = e.target.files ? e.target.files[0] : null;
-                                        onChange(file);
-                                        setSelectedFileName(file ? file.name : null);
-                                    }}
-                                    {...rest}
-                                />
-                            </label>
-                        </div> 
-                    </FormControl>
-                    {selectedFileName && <FormDescription className="text-xs mt-1">Selected: {selectedFileName}</FormDescription>}
-                    {!selectedFileName && <FormDescription className="text-xs mt-1">Upload an image to represent your story.</FormDescription>}
-                    <FormMessage />
-                </FormItem>
-                )}
-              />
 
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-base">Publication Status</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormField
+                  control={form.control}
+                  name="initialNodeContent"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex justify-between items-center mb-1">
+                        <FormLabel className="text-base">Your Narrative (First Node)</FormLabel>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleGetSuggestions}
+                          disabled={isFetchingSuggestions}
+                        >
+                          {isFetchingSuggestions ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Lightbulb className="mr-2 h-4 w-4" />
+                          )}
+                          AI Suggestions
+                        </Button>
+                      </div>
+                      <FormControl>
+                         <RichTextEditor
+                          initialContent={field.value}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormDescription className="text-xs">
+                        Write the first node of your story here. Use the toolbar for formatting.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                  <FormField
+                    control={form.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base">Category</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger className="text-sm">
+                              <SelectValue placeholder="Select a category" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="fiction">Fiction</SelectItem>
+                            <SelectItem value="non-fiction">Non-Fiction</SelectItem>
+                            <SelectItem value="poetry">Poetry</SelectItem>
+                            <SelectItem value="tech">Tech</SelectItem>
+                            <SelectItem value="life">Life</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                   <FormField
+                    control={form.control}
+                    name="tags"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base">Tags</FormLabel>
                         <FormControl>
-                          <SelectTrigger className="w-full sm:w-[200px] text-sm">
-                            <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
+                          <Input placeholder="e.g., adventure, sci-fi" {...field} className="text-sm"/>
                         </FormControl>
-                        <SelectContent>
-                          <SelectItem value="draft">Draft</SelectItem>
-                          <SelectItem value="published">Publish</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    <FormDescription className="text-xs">Save as draft or publish for everyone.</FormDescription>
-                    <FormMessage />
+                        <FormDescription className="text-xs">Comma-separated tags.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <FormField
+                  control={form.control}
+                  name="coverImage"
+                  render={({ field: { onChange, value, ...rest } }) => (
+                  <FormItem>
+                      <FormLabel className="text-base">Cover Image (Optional)</FormLabel>
+                      <FormControl>
+                          <div className="flex items-center justify-center w-full">
+                              <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-32 sm:h-40 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-muted transition-colors">
+                                  <div className="flex flex-col items-center justify-center pt-4 pb-5 sm:pt-5 sm:pb-6">
+                                      <UploadCloud className="w-8 h-8 sm:w-10 sm:w-10 mb-2 sm:mb-3 text-muted-foreground" />
+                                      <p className="mb-1 text-xs sm:text-sm text-muted-foreground"><span className="font-semibold">Click to upload</span> or drag & drop</p>
+                                      <p className="text-2xs sm:text-xs text-muted-foreground">PNG, JPG, GIF, WEBP (MAX. 5MB)</p>
+                                  </div>
+                                  <Input 
+                                      id="dropzone-file" 
+                                      type="file" 
+                                      className="hidden" 
+                                      accept="image/png, image/jpeg, image/gif, image/webp"
+                                      onChange={(e) => {
+                                          const file = e.target.files ? e.target.files[0] : null;
+                                          onChange(file);
+                                          setSelectedFileName(file ? file.name : null);
+                                      }}
+                                      {...rest}
+                                  />
+                              </label>
+                          </div> 
+                      </FormControl>
+                      {selectedFileName && <FormDescription className="text-xs mt-1">Selected: {selectedFileName}</FormDescription>}
+                      {!selectedFileName && <FormDescription className="text-xs mt-1">Upload an image to represent your story.</FormDescription>}
+                      <FormMessage />
                   </FormItem>
-                )}
-              />
+                  )}
+                />
 
-              <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4">
-                <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting} className="w-full sm:w-auto">
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSubmitting || !form.formState.isValid} className="w-full sm:w-auto">
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {form.getValues("status") === "published" ? "Publish Story" : "Save Draft"}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </div>
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base">Publication Status</FormLabel>
+                       <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger className="w-full sm:w-[200px] text-sm">
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="draft">Draft</SelectItem>
+                            <SelectItem value="published">Publish</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      <FormDescription className="text-xs">Save as draft or publish for everyone.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4">
+                  <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting} className="w-full sm:w-auto">
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting || !form.formState.isValid} className="w-full sm:w-auto">
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {form.getValues("status") === "published" ? "Publish Story" : "Save Draft"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Dialog open={showSuggestionsDialog} onOpenChange={setShowSuggestionsDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>AI Writing Suggestions</DialogTitle>
+            <DialogDescription>
+              Here are some ideas to help you continue your story. Click the copy icon to copy a suggestion.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4 max-h-[50vh] overflow-y-auto">
+            {aiSuggestions.length > 0 ? aiSuggestions.map((suggestion, index) => (
+              <Card key={index} className="p-3 bg-muted/50">
+                <div className="flex justify-between items-start gap-2">
+                  <p className="text-sm flex-grow">{suggestion}</p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 flex-shrink-0"
+                    onClick={() => {
+                      navigator.clipboard.writeText(suggestion);
+                      toast({ title: "Copied to clipboard!" });
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </Card>
+            )) : <p className="text-sm text-muted-foreground text-center">No suggestions available at the moment.</p>}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowSuggestionsDialog(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
