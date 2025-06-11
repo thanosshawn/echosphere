@@ -73,7 +73,7 @@ export interface Notification {
   message: string;
   isRead: boolean;
   createdAt: number; // Store as timestamp
-  highlight?: boolean; // From GenAI
+  highlight?: boolean; // From GenAI - Indicates if the notification is important
   link?: string; // URL to navigate to
 }
 
