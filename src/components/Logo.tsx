@@ -10,7 +10,7 @@ const Logo: React.FC<LogoProps> = ({ className }) => {
   return (
     <Link href="/" className={`flex items-center gap-2 text-2xl font-headline font-bold text-primary ${className}`}>
       <Image 
-        src="/images/echosphere-logo.jpeg" // Updated to local path
+        src="/images/echosphere-logo.png" // Updated to local path
         alt="EchoSphere Logo" 
         width={36} 
         height={36} 
