@@ -57,13 +57,10 @@ const RichTextEditorToolbar = ({ editor }: { editor: Editor | null }) => {
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
-  if (!editor) {
-    return null;
-  }
-
   const setLink = useCallback(() => {
+    if (!editor) return; // Guard against null editor
     const previousUrl = editor.getAttributes('link').href;
-    const url = window.prompt('URL', previousUrl);
+    const url = window.prompt('Enter the URL of the link:', previousUrl);
 
     if (url === null) return; // User cancelled
     if (url === '') { // User wants to remove link
@@ -74,6 +71,8 @@ const RichTextEditorToolbar = ({ editor }: { editor: Editor | null }) => {
   }, [editor]);
 
   const addImage = useCallback(async () => {
+    if (!editor) return; // Guard against null editor
+
     if (!supabase) {
       toast({ title: "Storage Error", description: "Supabase client not available.", variant: "destructive" });
       return;
@@ -101,10 +100,10 @@ const RichTextEditorToolbar = ({ editor }: { editor: Editor | null }) => {
       try {
         const fileExtension = file.name.split('.').pop();
         const fileName = `${uuidv4()}.${fileExtension}`;
-        const filePath = `editor-uploads/${fileName}`; // Store in 'editor-uploads' folder within the 'story-covers' bucket
+        const filePath = `editor-uploads/${fileName}`;
 
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('story-covers') // Assuming 'story-covers' is the bucket name
+          .from('story-covers') 
           .upload(filePath, file, {
             cacheControl: '3600',
             upsert: false,
@@ -132,7 +131,13 @@ const RichTextEditorToolbar = ({ editor }: { editor: Editor | null }) => {
     fileInput.click();
   }, [editor, toast]);
 
+
+  if (!editor) {
+    return null;
+  }
+
   const toggleColor = (color: string) => {
+    if (!editor) return; // Should not be needed due to the check above, but good practice
     if (color === 'default') {
       editor.chain().focus().unsetColor().run();
     } else {
@@ -227,3 +232,4 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialContent = '', on
 };
 
 export default RichTextEditor;
+
