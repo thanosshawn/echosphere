@@ -1,9 +1,8 @@
-
 // src/components/layout/Header.tsx
 "use client";
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState } from 'react'; // No React.useState needed here
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -14,8 +13,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'; // Added SheetHeader, SheetTitle
-import { Bell, LogOut, PlusCircle, User, Settings, LayoutDashboard, Menu } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Bell, LogOut, PlusCircle, User, Settings, LayoutDashboard, Menu, GalleryHorizontalEnd } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import Logo from '@/components/Logo';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -35,6 +34,12 @@ const Header = () => {
           <nav className="hidden md:flex items-center gap-1 md:gap-2">
             <Button variant="ghost" asChild size="sm">
               <Link href="/">Stories</Link>
+            </Button>
+            <Button variant="ghost" asChild size="sm">
+              <Link href="/visual-stories" className="flex items-center">
+                <GalleryHorizontalEnd className="mr-1.5 h-4 w-4" />
+                <span>Visual Stories</span>
+              </Link>
             </Button>
             <Button variant="ghost" asChild size="sm">
               <Link href="/stories/create" className="flex items-center">
@@ -122,12 +127,15 @@ const Header = () => {
               </SheetTrigger>
               <SheetContent side="left" className="w-[280px] p-0 flex flex-col">
                 <SheetHeader className="p-4 border-b">
-                  <SheetTitle className="sr-only">Main Navigation</SheetTitle>
+                  <SheetTitle className="sr-only">Main Navigation</SheetTitle> 
                   <Logo />
                 </SheetHeader>
                 <nav className="flex-grow p-4 space-y-1">
                   <Button variant="ghost" className="w-full justify-start text-base py-3" asChild onClick={() => setIsMobileMenuOpen(false)}>
                     <Link href="/">Stories</Link>
+                  </Button>
+                  <Button variant="ghost" className="w-full justify-start text-base py-3" asChild onClick={() => setIsMobileMenuOpen(false)}>
+                    <Link href="/visual-stories">Visual Stories</Link>
                   </Button>
                   <Button variant="ghost" className="w-full justify-start text-base py-3" asChild onClick={() => setIsMobileMenuOpen(false)}>
                     <Link href="/stories/create">Create Story</Link>
