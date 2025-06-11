@@ -10,7 +10,7 @@ import GlobalChat from '@/components/chat/GlobalChat'; // Import the GlobalChat 
 export const metadata: Metadata = {
   title: 'EchoSphere - Share Your Voice',
   description: 'A platform for stories and discussions.',
-  viewport: 'width=device-width, initial-scale=1',
+  // viewport: 'width=device-width, initial-scale=1', // Already exists, ensure it's present
 };
 
 export default function RootLayout({
@@ -21,6 +21,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="https://storage.googleapis.com/projectx-upload/e7466e43-933c-499e-ad0a-d555ac5332a2/image.jpeg" type="image/jpeg" sizes="any"/>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />

@@ -29,6 +29,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'storage.googleapis.com', // Added for new logo/favicon image
+        port: '',
+        pathname: '/**',
+      }
     ],
   },
 };
