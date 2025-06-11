@@ -14,11 +14,14 @@ import TextStyle from '@tiptap/extension-text-style';
 import { 
   Bold, Italic, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, 
   Pilcrow, Code, Quote, Underline as UnderlineIcon, Link as LinkIcon, 
-  Image as ImageIcon, AlignLeft, AlignCenter, AlignRight, Droplet, EyeOff
+  Image as ImageIcon, AlignLeft, AlignCenter, AlignRight, Droplet, EyeOff, Loader2
 } from 'lucide-react';
 import { Toggle } from "@/components/ui/toggle";
 import { cn } from '@/lib/utils';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { v4 as uuidv4 } from 'uuid';
+import { useToast } from "@/hooks/use-toast";
 
 // Custom Spoiler Mark
 const Spoiler = Mark.create({
@@ -51,6 +54,9 @@ interface RichTextEditorProps {
 }
 
 const RichTextEditorToolbar = ({ editor }: { editor: Editor | null }) => {
+  const [isUploading, setIsUploading] = useState(false);
+  const { toast } = useToast();
+
   if (!editor) {
     return null;
   }
@@ -67,12 +73,64 @@ const RichTextEditorToolbar = ({ editor }: { editor: Editor | null }) => {
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
   }, [editor]);
 
-  const addImage = useCallback(() => {
-    const url = window.prompt('Enter the URL of the image:');
-    if (url) {
-      editor.chain().focus().setImage({ src: url }).run();
+  const addImage = useCallback(async () => {
+    if (!supabase) {
+      toast({ title: "Storage Error", description: "Supabase client not available.", variant: "destructive" });
+      return;
     }
-  }, [editor]);
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.onchange = async (e) => {
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
+
+      if (!file) return;
+
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast({ title: "Upload Error", description: "File is too large (max 5MB).", variant: "destructive" });
+        return;
+      }
+      if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+        toast({ title: "Upload Error", description: "Invalid file type. Only JPG, PNG, GIF, WEBP allowed.", variant: "destructive" });
+        return;
+      }
+      
+      setIsUploading(true);
+      try {
+        const fileExtension = file.name.split('.').pop();
+        const fileName = `${uuidv4()}.${fileExtension}`;
+        const filePath = `editor-uploads/${fileName}`; // Store in 'editor-uploads' folder within the 'story-covers' bucket
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('story-covers') // Assuming 'story-covers' is the bucket name
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data: publicUrlData } = supabase.storage.from('story-covers').getPublicUrl(filePath);
+        if (!publicUrlData.publicUrl) {
+          throw new Error("Could not get public URL for uploaded image.");
+        }
+        
+        editor.chain().focus().setImage({ src: publicUrlData.publicUrl, alt: file.name }).run();
+        toast({ title: "Image Uploaded", description: "Image successfully added to content." });
+
+      } catch (error: any) {
+        console.error("Error uploading image:", error);
+        toast({ title: "Upload Failed", description: error.message || "Could not upload image.", variant: "destructive" });
+      } finally {
+        setIsUploading(false);
+      }
+    };
+    fileInput.click();
+  }, [editor, toast]);
 
   const toggleColor = (color: string) => {
     if (color === 'default') {
@@ -98,7 +156,9 @@ const RichTextEditorToolbar = ({ editor }: { editor: Editor | null }) => {
       <Toggle size="sm" pressed={editor.isActive({ textAlign: 'right' })} onPressedChange={() => editor.chain().focus().setTextAlign('right').run()} aria-label="Align right"><AlignRight className="h-4 w-4" /></Toggle>
 
       <Toggle size="sm" onPressedChange={setLink} aria-label="Set link"><LinkIcon className="h-4 w-4" /></Toggle>
-      <Toggle size="sm" onPressedChange={addImage} aria-label="Add image"><ImageIcon className="h-4 w-4" /></Toggle>
+      <Toggle size="sm" onPressedChange={addImage} disabled={isUploading} aria-label="Add image from device">
+        {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+      </Toggle>
 
       <Toggle size="sm" pressed={editor.isActive('paragraph')} onPressedChange={() => editor.chain().focus().setParagraph().run()} aria-label="Toggle paragraph"><Pilcrow className="h-4 w-4" /></Toggle>
       <Toggle size="sm" pressed={editor.isActive('bulletList')} onPressedChange={() => editor.chain().focus().toggleBulletList().run()} aria-label="Toggle bullet list"><List className="h-4 w-4" /></Toggle>
@@ -108,7 +168,6 @@ const RichTextEditorToolbar = ({ editor }: { editor: Editor | null }) => {
       
       <Toggle size="sm" pressed={editor.isActive('spoiler')} onPressedChange={() => editor.chain().focus().toggleSpoiler().run()} aria-label="Toggle spoiler"><EyeOff className="h-4 w-4" /></Toggle>
 
-      {/* Basic Color Picker Example */}
       <div className="flex items-center gap-1 ml-2">
           <span className="text-xs text-muted-foreground">Color:</span>
           <button type="button" onClick={() => toggleColor('default')} className={cn("h-5 w-5 rounded border", editor.isActive('textStyle') && !editor.isActive('textStyle', { color: '#FF0000' }) && !editor.isActive('textStyle', { color: '#0000FF' }) && !editor.isActive('textStyle', { color: '#008000' }) ? "ring-2 ring-primary" : "")} style={{ backgroundColor: 'hsl(var(--foreground))' }} aria-label="Default color"></button>
@@ -123,25 +182,22 @@ const RichTextEditorToolbar = ({ editor }: { editor: Editor | null }) => {
 const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialContent = '', onChange, editable = true }) => {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        // Configure starter kit options if needed
-        // Example: heading: { levels: [1, 2, 3] },
-      }),
+      StarterKit.configure({}),
       Underline,
       Link.configure({
-        openOnClick: false, // default is true, set to false if you want to handle clicks differently
+        openOnClick: false, 
         autolink: true,
       }),
       Image.configure({
-        inline: false, // Allows images to be on their own line
-        allowBase64: false, // For security, disallow base64 images unless you have a specific need
+        inline: false, 
+        allowBase64: false, 
       }),
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
-      TextStyle, // Required for Color extension
+      TextStyle, 
       Color,
-      Spoiler, // Custom spoiler extension
+      Spoiler, 
     ],
     content: initialContent,
     editable,
@@ -150,14 +206,12 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialContent = '', on
     },
     editorProps: {
       attributes: {
-        // Apply Tailwind Typography classes here or on the parent rendering div
         class: 'ProseMirror focus:outline-none w-full rounded-b-md border-input border-t-0 bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
       },
-      // handleClickOn for spoiler tags to reveal them in the editor
       handleClickOn(view, pos, node, nodePos, event, direct) {
         if (node.type.name === 'spoiler' && event.target instanceof HTMLElement && event.target.closest('.spoiler')) {
            event.target.closest('.spoiler')?.classList.toggle('revealed');
-           return true; // Prevent default Tiptap behavior if needed
+           return true; 
         }
         return false;
       }
@@ -173,5 +227,3 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialContent = '', on
 };
 
 export default RichTextEditor;
-
-    
