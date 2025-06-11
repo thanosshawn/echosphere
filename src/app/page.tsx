@@ -53,7 +53,7 @@ export default function HomePage() { // Renamed component to HomePage
             updatedAt: Number(data.updatedAt),
             views: data.views || 0,
             likes: data.likes || 0,
-            commentCount: data.commentCount || (data.nodeCount ? (data.nodeCount * 0) : 0), 
+            commentCount: data.commentCount || 0, // Ensure this uses the field from Firestore
             nodeCount: data.nodeCount || 0, 
             firstNodeExcerpt: data.firstNodeExcerpt || "No excerpt available.",
           } as Story); 
@@ -82,7 +82,7 @@ export default function HomePage() { // Renamed component to HomePage
     return (
       <div className="text-center py-10">
         <h2 className="text-2xl font-semibold mb-4 text-destructive">{error}</h2>
-        <Button onClick={() => window.location.reload()}>Try Again</Button>
+        <Button onClick={() => window.location.reload()} className="w-full sm:w-auto">Try Again</Button>
       </div>
     );
   }
@@ -133,7 +133,7 @@ export default function HomePage() { // Renamed component to HomePage
             {stories.map((story) => (
               <Card key={story.id} className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out rounded-lg">
                 <Link href={`/stories/${story.id}`} className="block group">
-                  <div className="overflow-hidden aspect-video bg-muted"> {/* Changed aspect-[16/9] to aspect-video for Tailwind standard */}
+                  <div className="overflow-hidden aspect-video bg-muted">
                     <Image
                       src={story.coverImageUrl || `https://placehold.co/400x225.png?text=${encodeURIComponent(story.title)}`}
                       alt={`Cover image for ${story.title}`}
@@ -171,8 +171,8 @@ export default function HomePage() { // Renamed component to HomePage
                 </CardContent>
                 <CardFooter className="text-xs text-muted-foreground flex justify-between items-center border-t p-4">
                   <div className="flex items-center gap-2 sm:gap-3">
-                    <span className="flex items-center gap-1"><Eye className="h-3.5 w-3.5" /> {story.views}</span>
-                    <span className="flex items-center gap-1"><Heart className="h-3.5 w-3.5" /> {story.likes}</span>
+                    <span className="flex items-center gap-1"><Eye className="h-3.5 w-3.5" /> {story.views || 0}</span>
+                    <span className="flex items-center gap-1"><Heart className="h-3.5 w-3.5" /> {story.likes || 0}</span>
                     <span className="flex items-center gap-1"><MessageIcon className="h-3.5 w-3.5" /> {story.commentCount || 0}</span>
                   </div>
                   <Link href={`/stories/${story.id}`} className="text-primary hover:underline font-medium flex items-center gap-1">
@@ -187,19 +187,20 @@ export default function HomePage() { // Renamed component to HomePage
             <Search className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <p className="text-xl text-muted-foreground">No stories found yet.</p>
             <p className="text-sm text-muted-foreground mb-6">Why not be the first to share yours?</p>
-            <Button asChild className="mt-2">
+            <Button asChild className="mt-2 w-full sm:w-auto">
               <Link href="/stories/create">Share Your Story</Link>
             </Button>
           </div>
         )}
       </section>
 
-      {stories.length > 0 && ( /* Basic Pagination Placeholder */
+      {stories.length > 0 && ( 
         <section className="flex justify-center mt-12 space-x-2">
-          <Button variant="outline" className="text-sm" disabled>Previous</Button>
-          <Button variant="outline" className="text-sm" disabled>Next</Button>
+          <Button variant="outline" className="text-sm w-full sm:w-auto" disabled>Previous</Button>
+          <Button variant="outline" className="text-sm w-full sm:w-auto" disabled>Next</Button>
         </section>
       )}
     </div>
   );
 }
+

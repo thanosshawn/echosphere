@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
 import { doc, collection, writeBatch, serverTimestamp, runTransaction, Timestamp, FieldValue } from 'firebase/firestore';
-import type { StoryNodeComment, StoryNode } from '@/types';
+import type { StoryNodeComment, StoryNode, Story } from '@/types';
 import { revalidatePath } from 'next/cache';
 
 const addCommentToStoryNodeSchema = z.object({
@@ -44,16 +44,30 @@ export async function addCommentToStoryNodeAction(
     
     await runTransaction(db, async (transaction) => {
       const nodeRef = doc(db, "stories", storyId, "nodes", nodeId);
-      const nodeDoc = await transaction.get(nodeRef);
+      const storyRef = doc(db, "stories", storyId);
+
+      const [nodeDoc, storyDoc] = await Promise.all([
+        transaction.get(nodeRef),
+        transaction.get(storyRef)
+      ]);
 
       if (!nodeDoc.exists()) {
         console.error(`[addCommentToStoryNodeAction] Node not found during transaction: ${nodeRef.path}`);
         throw new Error("Story node not found, cannot update comment count.");
       }
+      if (!storyDoc.exists()) {
+        console.error(`[addCommentToStoryNodeAction] Story not found during transaction: ${storyRef.path}`);
+        throw new Error("Story not found, cannot update total comment count.");
+      }
 
       const nodeData = nodeDoc.data() as StoryNode;
-      const currentCommentCount = nodeData.commentCount || 0;
-      const newCommentCount = currentCommentCount + 1;
+      const storyData = storyDoc.data() as Story;
+
+      const currentCommentCountOnNode = nodeData.commentCount || 0;
+      const newCommentCountOnNode = currentCommentCountOnNode + 1;
+
+      const currentTotalCommentCountOnStory = storyData.commentCount || 0;
+      const newTotalCommentCountOnStory = currentTotalCommentCountOnStory + 1;
 
       const newComment: Omit<StoryNodeComment, 'id'> = {
         storyId,
@@ -70,16 +84,23 @@ export async function addCommentToStoryNodeAction(
       console.log("[addCommentToStoryNodeAction] Comment added to transaction:", newComment);
 
       transaction.update(nodeRef, { 
-        commentCount: newCommentCount,
-        updatedAt: currentTime // Also update the node's updatedAt timestamp
+        commentCount: newCommentCountOnNode,
+        updatedAt: currentTime 
       });
-      console.log(`[addCommentToStoryNodeAction] Node commentCount updated to ${newCommentCount} in transaction for node: ${nodeRef.path}`);
+      console.log(`[addCommentToStoryNodeAction] Node commentCount updated to ${newCommentCountOnNode} in transaction for node: ${nodeRef.path}`);
+
+      transaction.update(storyRef, {
+        commentCount: newTotalCommentCountOnStory,
+        updatedAt: currentTime
+      });
+      console.log(`[addCommentToStoryNodeAction] Story total commentCount updated to ${newTotalCommentCountOnStory} in transaction for story: ${storyRef.path}`);
     });
 
     console.log("[addCommentToStoryNodeAction] Transaction successful. Comment ID:", commentRef.id);
 
     revalidatePath(`/stories/${storyId}`); 
-    console.log("[addCommentToStoryNodeAction] Path revalidated:", `/stories/${storyId}`);
+    revalidatePath('/'); // Revalidate homepage where story cards are displayed
+    console.log("[addCommentToStoryNodeAction] Paths revalidated:", `/stories/${storyId}`, '/');
     
     return { success: "Comment posted!", commentId: commentRef.id };
 
@@ -232,3 +253,4 @@ export async function upvoteStoryNodeAction(values: VoteActionInput): Promise<{ 
 export async function downvoteStoryNodeAction(values: VoteActionInput): Promise<{ success?: string; error?: string }> {
   return handleVote(values, 'downvote');
 }
+

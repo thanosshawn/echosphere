@@ -4,7 +4,7 @@
 
 import { useEffect, useState, useCallback, Fragment } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc, collection, getDocs, query, orderBy as firestoreOrderBy, where } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, query, orderBy as firestoreOrderBy, where, runTransaction, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Story, StoryNode, StoryNodeComment, UserProfile } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
@@ -126,7 +126,7 @@ const StoryNodeDisplay: React.FC<StoryNodeDisplayProps> = ({
   };
   
   const userVote = currentUser && node.votedBy ? node.votedBy[currentUser.uid] : null;
-  const nodeIndentation = level * 16; 
+  const nodeIndentation = level * 8; // Reduced indentation for mobile
 
   return (
     <div style={{ marginLeft: `${nodeIndentation}px` }} className={cn("mt-4 rounded-lg shadow-sm", level > 0 ? 'bg-muted/20 p-3 sm:p-4' : 'bg-card p-4 sm:p-5')}>
@@ -264,6 +264,7 @@ export default function StoryDetailPage() {
   const [storyNodes, setStoryNodes] = useState<StoryNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [viewCounted, setViewCounted] = useState(false);
 
   const fetchStoryAndNodes = useCallback(async () => {
     if (!storyId || !db) {
@@ -321,6 +322,31 @@ export default function StoryDetailPage() {
     fetchStoryAndNodes();
   }, [fetchStoryAndNodes]);
 
+  useEffect(() => {
+    if (storyId && !viewCounted && db) {
+      const incrementViewCount = async () => {
+        const storyRef = doc(db, "stories", storyId);
+        try {
+          await runTransaction(db, async (transaction) => {
+            const storyDoc = await transaction.get(storyRef);
+            if (!storyDoc.exists()) {
+              console.warn(`Story ${storyId} not found for view count increment.`);
+              return;
+            }
+            const currentViews = storyDoc.data().views || 0;
+            transaction.update(storyRef, { views: currentViews + 1 });
+          });
+          setViewCounted(true); 
+          console.log(`View count incremented for story ${storyId}`);
+        } catch (e) {
+          console.error("Error incrementing view count for story " + storyId + ":", e);
+        }
+      };
+      incrementViewCount();
+    }
+  }, [storyId, viewCounted, db]);
+
+
   const handleVoteOnNode = async (nodeId: string, voteType: 'upvote' | 'downvote') => {
     if (!currentUser || !storyId) {
         toast({ title: "Authentication Required", description: "You must be logged in to vote.", variant: "destructive" });
@@ -354,7 +380,7 @@ export default function StoryDetailPage() {
     return (
       <div className="text-center py-10">
         <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-destructive">{error}</h2>
-        <Button onClick={() => router.back()}>
+        <Button onClick={() => router.back()} className="w-full sm:w-auto">
           <ArrowLeft className="mr-2 h-4 w-4" /> Go Back
         </Button>
       </div>
@@ -365,7 +391,7 @@ export default function StoryDetailPage() {
     return (
        <div className="text-center py-10">
         <h2 className="text-xl sm:text-2xl font-semibold mb-4">Story not found.</h2>
-        <Button onClick={() => router.back()}>
+        <Button onClick={() => router.back()} className="w-full sm:w-auto">
           <ArrowLeft className="mr-2 h-4 w-4" /> Go Back
         </Button>
       </div>
@@ -375,11 +401,11 @@ export default function StoryDetailPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
-        <Button variant="outline" onClick={() => router.push('/')} size="sm"> {/* Changed to / from /stories */}
+        <Button variant="outline" onClick={() => router.push('/')} size="sm" className="w-full sm:w-auto">
           <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to Stories
         </Button>
         {isAuthor && (
-          <Button variant="outline" asChild size="sm">
+          <Button variant="outline" asChild size="sm" className="w-full sm:w-auto">
             <Link href={`/stories/edit/${story.id}`}> 
               <Edit className="mr-1.5 h-4 w-4" /> Edit Story
             </Link>
@@ -480,7 +506,7 @@ export default function StoryDetailPage() {
             <span className="flex items-center"><Heart className="mr-1 sm:mr-1.5 h-4 w-4 sm:h-5 sm:w-5" /> {story.likes || 0} likes</span>
              <span className="flex items-center">
               <MessageSquare className="mr-1 sm:mr-1.5 h-4 w-4 sm:h-5 sm:w-5" /> 
-              {storyNodes.reduce((acc, curr) => acc + (curr.commentCount || 0), 0)} total comments
+              {story.commentCount || 0} total comments
             </span>
           </div>
         </footer>
@@ -488,3 +514,4 @@ export default function StoryDetailPage() {
     </div>
   );
 }
+

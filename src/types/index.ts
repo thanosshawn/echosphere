@@ -24,6 +24,7 @@ export interface Story {
   updatedAt: number; // Store as timestamp, updated when story metadata or any part changes
   views: number;
   likes: number; // Overall story likes, distinct from node votes
+  commentCount: number; // Total comments across all nodes
   nodeCount: number;
   firstNodeExcerpt: string;
   isLocked: boolean;
@@ -84,3 +85,4 @@ export interface GlobalChatMessage {
   text: string;
   createdAt: firebase.firestore.Timestamp | Date; // Storing as Date on client after fetch
 }
+

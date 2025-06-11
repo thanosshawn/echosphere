@@ -110,7 +110,7 @@ export async function createStoryAction(formData: CreateStoryFormValues): Promis
     const storyToCreate: Omit<Story, 'id'> = {
       authorId,
       authorUsername: authorUsername || 'Anonymous',
-      authorProfilePictureUrl: authorProfilePictureUrl ?? null, // Changed to use ?? null
+      authorProfilePictureUrl: authorProfilePictureUrl ?? null,
       title,
       coverImageUrl,
       tags: tags ? tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
@@ -120,6 +120,7 @@ export async function createStoryAction(formData: CreateStoryFormValues): Promis
       updatedAt: currentTime, 
       views: 0,
       likes: 0,
+      commentCount: 0, // Initialize commentCount
       nodeCount: 1, 
       firstNodeExcerpt: plainTextExcerpt,
       isLocked: false,
@@ -135,7 +136,7 @@ export async function createStoryAction(formData: CreateStoryFormValues): Promis
       storyId: newStoryRef.id,
       authorId,
       authorUsername: authorUsername || 'Anonymous',
-      authorProfilePictureUrl: authorProfilePictureUrl ?? null, // Changed to use ?? null
+      authorProfilePictureUrl: authorProfilePictureUrl ?? null,
       content: initialNodeContent,
       order: currentTime,
       parentId: null,
@@ -152,7 +153,7 @@ export async function createStoryAction(formData: CreateStoryFormValues): Promis
     await batch.commit();
     console.log("[createStoryAction] Firestore batch committed successfully.");
 
-    revalidatePath('/stories');
+    revalidatePath('/'); // Updated from /stories
     revalidatePath(`/stories/${newStoryRef.id}`);
     revalidatePath('/dashboard'); 
     if (authorId) {
@@ -169,3 +170,4 @@ export async function createStoryAction(formData: CreateStoryFormValues): Promis
     return { error: `An unexpected server error occurred: ${error.message || "Please check server logs for more details."}`, storyId: null };
   }
 }
+
